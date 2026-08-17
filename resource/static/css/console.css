@@ -1,0 +1,133 @@
+/* 全站左侧图标导航，index / scan / debug 三个页面共用。 */
+:root {
+  --rail-w: 64px;
+  --rail-bg: oklch(0.19 0.025 252);
+  --rail-ink: oklch(0.96 0.006 250);
+  --rail-muted: oklch(0.72 0.02 252);
+  --rail-active: oklch(0.54 0.205 3);
+}
+
+body {
+  padding-left: var(--rail-w);
+}
+
+.rail {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: var(--rail-w);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 0;
+  background: var(--rail-bg);
+  color: var(--rail-ink);
+}
+
+.rail-brand {
+  width: 38px;
+  height: 38px;
+  margin-bottom: 10px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  background: var(--rail-ink);
+  color: var(--rail-bg);
+  font: 800 16px/1 ui-sans-serif, system-ui, "Microsoft YaHei", sans-serif;
+  text-decoration: none;
+}
+
+.rail-item {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  color: var(--rail-muted);
+  text-decoration: none;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.rail-item:hover {
+  background: oklch(0.28 0.03 252);
+  color: var(--rail-ink);
+}
+
+.rail-item.active {
+  background: var(--rail-active);
+  color: oklch(1 0 0);
+}
+
+.rail-item:focus-visible {
+  outline: 3px solid oklch(0.82 0.08 190);
+  outline-offset: 2px;
+}
+
+.rail-item svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.rail-tip {
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 5px 9px;
+  border-radius: 6px;
+  background: var(--rail-bg);
+  color: var(--rail-ink);
+  font: 500 12px/1.2 ui-sans-serif, system-ui, "Microsoft YaHei", sans-serif;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms ease;
+}
+
+.rail-item:hover .rail-tip,
+.rail-item:focus-visible .rail-tip {
+  opacity: 1;
+}
+
+.rail-spacer {
+  flex: 1;
+}
+
+@media (max-width: 760px) {
+  body {
+    padding-left: 0;
+    padding-bottom: 58px;
+  }
+
+  .rail {
+    inset: auto 0 0 0;
+    width: auto;
+    height: 58px;
+    flex-direction: row;
+    justify-content: space-around;
+    padding: 0 8px;
+  }
+
+  .rail-brand,
+  .rail-spacer {
+    display: none;
+  }
+
+  .rail-tip {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rail-item,
+  .rail-tip {
+    transition-duration: 1ms;
+  }
+}

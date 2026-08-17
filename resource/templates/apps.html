@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>应用 · YYB Go</title>
+  <link rel="stylesheet" href="/static/css/console.css">
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: oklch(1 0 0);
+      --bg-soft: oklch(0.974 0.004 250);
+      --surface: oklch(0.986 0.004 250);
+      --surface-strong: oklch(0.948 0.009 250);
+      --ink: oklch(0.19 0.025 252);
+      --muted: oklch(0.43 0.025 252);
+      --faint: oklch(0.58 0.018 252);
+      --line: oklch(0.885 0.012 250);
+      --primary: oklch(0.54 0.205 3);
+      --primary-hover: oklch(0.48 0.195 3);
+      --success: oklch(0.55 0.135 145);
+      --danger: oklch(0.55 0.18 25);
+      --code-bg: oklch(0.16 0.022 252);
+      --code-ink: oklch(0.96 0.006 250);
+      --radius: 8px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg-soft);
+      color: var(--ink);
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 14px 24px;
+      background: var(--bg);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .brand-title { margin: 0; font-size: 18px; font-weight: 760; }
+    .brand-subtitle { margin-top: 3px; color: var(--muted); font-size: 12px; }
+    .top-actions, .inline-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+    .btn {
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 7px 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      background: var(--bg);
+      color: var(--ink);
+      text-decoration: none;
+      transition: background 160ms ease;
+    }
+
+    .btn:hover { background: var(--surface-strong); }
+    .btn.primary { background: var(--primary); border-color: var(--primary); color: oklch(1 0 0); }
+    .btn.primary:hover { background: var(--primary-hover); }
+    .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+    .btn:focus-visible, .input:focus-visible, .select:focus-visible, .route:focus-visible {
+      outline: 3px solid oklch(0.82 0.08 190);
+      outline-offset: 2px;
+    }
+
+    .shell { width: min(1180px, 100%); margin: 0 auto; padding: 20px 24px 32px; display: grid; gap: 14px; }
+    .page-lead { color: var(--muted); font-size: 13px; margin: 0 0 2px; }
+
+    .app-card {
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 16px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .app-name { margin: 0; font-size: 15px; font-weight: 720; display: flex; align-items: center; gap: 8px; }
+    .app-desc { margin: 4px 0 10px; color: var(--muted); font-size: 12.5px; }
+    .app-meta { display: grid; gap: 8px; max-width: 620px; }
+    .app-actions { display: grid; gap: 8px; justify-items: stretch; min-width: 168px; }
+
+    .chip {
+      min-height: 26px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 9px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .chip strong { color: var(--ink); font-weight: 700; }
+    .chip.ok { border-color: oklch(0.82 0.07 145); color: var(--success); }
+    .chip.bad { border-color: oklch(0.82 0.07 25); color: var(--danger); }
+
+    .field { display: grid; gap: 5px; min-width: 0; }
+    .field label { color: var(--muted); font-size: 12px; }
+
+    .input, .select, .textarea {
+      width: 100%;
+      min-height: 34px;
+      padding: 7px 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--bg);
+      color: var(--ink);
+    }
+
+    .input.mono, .textarea { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; }
+    .textarea { min-height: 116px; resize: vertical; }
+    .hidden { display: none !important; }
+
+    /* ---- 调试面板 ---- */
+    .scrim {
+      position: fixed;
+      inset: 0;
+      z-index: 60;
+      background: oklch(0.19 0.025 252 / 0.42);
+    }
+
+    .drawer {
+      position: fixed;
+      inset: 0 0 0 auto;
+      z-index: 61;
+      width: min(1180px, 100%);
+      background: var(--bg-soft);
+      border-left: 1px solid var(--line);
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    .drawer-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 12px 16px;
+      background: var(--bg);
+      border-bottom: 1px solid var(--line);
+      flex-wrap: wrap;
+    }
+
+    .drawer-title { margin: 0; font-size: 15px; font-weight: 720; }
+    .drawer-sub { margin-top: 2px; color: var(--muted); font-size: 12px; font-family: ui-monospace, Menlo, Consolas, monospace; }
+
+    .drawer-body {
+      display: grid;
+      grid-template-columns: 268px minmax(0, 1fr) minmax(0, 1fr);
+      gap: 12px;
+      padding: 12px 16px 16px;
+      min-height: 0;
+    }
+
+    .pane {
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .pane-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface);
+    }
+
+    .pane-head h3 { margin: 0; font-size: 13px; font-weight: 700; }
+    .pane-head p { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
+    .pane-body { padding: 12px; display: grid; gap: 10px; align-content: start; overflow: auto; min-height: 0; }
+
+    .route-group { padding: 9px 6px 3px; color: var(--faint); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
+
+    .route {
+      width: 100%;
+      border: 1px solid transparent;
+      border-radius: 7px;
+      background: none;
+      color: inherit;
+      text-align: left;
+      padding: 6px 7px;
+      display: grid;
+      gap: 2px;
+    }
+
+    .route:hover { background: var(--surface-strong); }
+    .route.active { background: var(--surface); border-color: var(--line); }
+    .route-line { display: flex; align-items: center; gap: 7px; min-width: 0; }
+    .route-path { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .route-note { color: var(--muted); font-size: 12px; }
+
+    .verb {
+      flex: none;
+      min-width: 46px;
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: var(--surface-strong);
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 800;
+      text-align: center;
+    }
+
+    .verb.get { background: oklch(0.94 0.027 190); color: oklch(0.4 0.11 190); }
+    .verb.post { background: oklch(0.94 0.035 145); color: oklch(0.42 0.12 145); }
+    .verb.delete { background: oklch(0.955 0.032 25); color: oklch(0.47 0.16 25); }
+
+    .request-line { display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 8px; }
+    .params { display: grid; gap: 8px; }
+    .meta-row { display: flex; flex-wrap: wrap; gap: 8px; }
+
+    .result-box {
+      margin: 0;
+      padding: 12px;
+      min-height: 200px;
+      border-radius: var(--radius);
+      background: var(--code-bg);
+      color: var(--code-ink);
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+      font-size: 12.5px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      overflow: auto;
+    }
+
+    .result-image { max-width: 100%; border: 1px solid var(--line); border-radius: var(--radius); }
+    .headers { margin: 0; color: var(--muted); font-size: 12px; font-family: ui-monospace, Menlo, Consolas, monospace; white-space: pre-wrap; }
+    .note { color: var(--faint); font-size: 12px; }
+
+    @media (max-width: 1180px) {
+      .drawer-body { grid-template-columns: 240px minmax(0, 1fr); }
+      .drawer-body .result-pane { grid-column: 1 / -1; }
+    }
+
+    @media (max-width: 820px) {
+      .app-card { grid-template-columns: 1fr; }
+      .drawer-body { grid-template-columns: 1fr; overflow: auto; }
+      .topbar { flex-direction: column; align-items: flex-start; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1 class="brand-title">应用</h1>
+      <div class="brand-subtitle">本地服务接口调试面板</div>
+    </div>
+    <div class="top-actions">
+      <a class="btn" href="/">返回控制台</a>
+    </div>
+  </header>
+
+  <main class="shell">
+    <p class="page-lead">点击「调试接口」会打开该应用自己的接口面板。</p>
+    <div id="appList"></div>
+  </main>
+
+  <div class="scrim hidden" id="scrim"></div>
+  <section class="drawer hidden" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawerTitle">
+    <div class="drawer-head">
+      <div>
+        <h2 class="drawer-title" id="drawerTitle">接口调试</h2>
+        <div class="drawer-sub" id="drawerBase">—</div>
+      </div>
+      <div class="inline-actions">
+        <button class="btn" id="copyCurlBtn" type="button">复制 curl</button>
+        <button class="btn primary" id="sendBtn" type="button">发送</button>
+        <button class="btn" id="closeDrawerBtn" type="button">关闭</button>
+      </div>
+    </div>
+
+    <div class="drawer-body">
+      <section class="pane" aria-label="接口列表">
+        <div class="pane-head">
+          <div>
+            <h3>接口</h3>
+            <p id="routeCount">—</p>
+          </div>
+        </div>
+        <div class="pane-body">
+          <input class="input" id="routeSearch" type="search" placeholder="搜索路径或说明" autocomplete="off">
+          <div id="routeList"></div>
+        </div>
+      </section>
+
+      <section class="pane" aria-label="请求">
+        <div class="pane-head">
+          <div>
+            <h3>请求</h3>
+            <p id="routeNote">选择左侧接口或直接填写路径</p>
+          </div>
+        </div>
+        <div class="pane-body">
+          <div class="request-line">
+            <div class="field">
+              <label for="methodSel">方法</label>
+              <select class="select" id="methodSel">
+                <option>GET</option>
+                <option>POST</option>
+                <option>DELETE</option>
+                <option>PUT</option>
+                <option>PATCH</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="pathInput">路径</label>
+              <input class="input mono" id="pathInput" spellcheck="false" autocomplete="off">
+            </div>
+          </div>
+
+          <div class="params hidden" id="paramsBox"></div>
+
+          <div class="field hidden" id="refPickerGroup">
+            <label for="refSel">账号 ref 快捷填充</label>
+            <div class="inline-actions">
+              <select class="select" id="refSel" style="flex:1;min-width:0"><option value="">未加载</option></select>
+              <button class="btn" id="fillRefBtn" type="button">填入</button>
+              <button class="btn" id="reloadRefBtn" type="button">刷新</button>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="bodyInput">请求体 JSON（GET 可留空）</label>
+            <textarea class="textarea" id="bodyInput" spellcheck="false"></textarea>
+          </div>
+
+          <div class="inline-actions">
+            <button class="btn" id="formatBtn" type="button">格式化 JSON</button>
+            <button class="btn" id="clearBodyBtn" type="button">清空</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="pane result-pane" aria-label="响应">
+        <div class="pane-head">
+          <div>
+            <h3>响应</h3>
+            <p id="resultMeta">等待发送</p>
+          </div>
+          <button class="btn" id="copyResultBtn" type="button">复制</button>
+        </div>
+        <div class="pane-body">
+          <div class="meta-row">
+            <span class="chip">状态 <strong id="statusText">—</strong></span>
+            <span class="chip">耗时 <strong id="timeText">—</strong></span>
+            <span class="chip">大小 <strong id="sizeText">—</strong></span>
+          </div>
+          <img class="result-image hidden" id="resultImage" alt="响应图片">
+          <pre class="result-box" id="resultBox">发送后这里显示原始响应。</pre>
+          <pre class="headers" id="resultHeaders"></pre>
+        </div>
+      </section>
+    </div>
+  </section>
+
+  <script src="/static/js/nav.js"></script>
+  <script src="/static/js/api-catalog.js"></script>
+  <script src="/static/js/apps.js"></script>
+</body>
+</html>

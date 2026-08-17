@@ -1,0 +1,7 @@
+{
+  "listen_address": "0.0.0.0:8000",
+  "data_root": "/app/data",
+  "asset_root": "/app/assets",
+  "database_filename": "yyb.db",
+  "tcp_proxy": ""
+}

@@ -1,0 +1,16 @@
+.git
+.gitignore
+.idea
+.vscode
+
+*.exe
+*.bat
+*.log
+*.md
+
+resource/avatars
+resource/db
+resource/qr
+
+config/service.json
+deploy
