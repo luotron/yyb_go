@@ -31,15 +31,17 @@ func run() error {
 	}
 
 	config := httpapi.Config{
-		ResourceRoot:   fileConfig.DataRoot,
-		AssetRoot:      fileConfig.AssetRoot,
-		DBFilename:     fileConfig.DatabaseFilename,
-		TCPProxy:       fileConfig.TCPProxy,
-		SessionTTL:     30 * time.Minute,
-		RequestTimeout: 8 * time.Second,
-		AvatarTimeout:  10 * time.Second,
-		ScanTimeout:    180 * time.Second,
-		QRSessionTTL:   5 * time.Minute,
+		ResourceRoot:      fileConfig.DataRoot,
+		AssetRoot:         fileConfig.AssetRoot,
+		DBFilename:        fileConfig.DatabaseFilename,
+		TCPProxy:          fileConfig.TCPProxy,
+		SessionTTL:        30 * time.Minute,
+		RequestTimeout:    8 * time.Second,
+		AvatarTimeout:     10 * time.Second,
+		ScanTimeout:       180 * time.Second,
+		QRSessionTTL:      5 * time.Minute,
+		KeepAliveInterval: time.Duration(fileConfig.KeepAliveIntervalMinute) * time.Minute,
+		KeepAliveAhead:    time.Duration(fileConfig.KeepAliveAheadMinute) * time.Minute,
 	}
 
 	app, err := httpapi.NewApp(config)

@@ -113,7 +113,7 @@ resource/static/                静态资源
 go test ./...
 
 # 编译 Windows 可执行文件（yyb-go.exe）
-go build -trimpath -ldflags="-s -w" -o yyb-go.exe ./cmd/yyb-go
+go build -trimpath -ldflags="-s -w" -o bin/yyb-go.exe ./cmd/yyb-go
 
 # 交叉编译 Linux amd64（bin/yyb-go-local-linux-amd64）
 $env:CGO_ENABLED="0"; $env:GOOS="linux"; $env:GOARCH="amd64"

@@ -16,11 +16,13 @@ import (
 const maximumConfigSize = 1 << 20
 
 type Config struct {
-	ListenAddress    string `json:"listen_address"`
-	DataRoot         string `json:"data_root"`
-	AssetRoot        string `json:"asset_root"`
-	DatabaseFilename string `json:"database_filename"`
-	TCPProxy         string `json:"tcp_proxy"`
+	ListenAddress           string `json:"listen_address"`
+	DataRoot                string `json:"data_root"`
+	AssetRoot               string `json:"asset_root"`
+	DatabaseFilename        string `json:"database_filename"`
+	TCPProxy                string `json:"tcp_proxy"`
+	KeepAliveIntervalMinute int64  `json:"keepalive_interval_minutes"`
+	KeepAliveAheadMinute    int64  `json:"keepalive_ahead_minutes"`
 }
 
 func Load(filename string) (Config, error) {
@@ -68,6 +70,15 @@ func (c *Config) normalizeAndValidate() error {
 	}
 	if c.DatabaseFilename == "" || filepath.Base(c.DatabaseFilename) != c.DatabaseFilename {
 		return errors.New("database_filename 必须是不含目录的文件名")
+	}
+	if c.KeepAliveIntervalMinute < 0 || c.KeepAliveAheadMinute < 0 {
+		return errors.New("keepalive 配置必须是非负整数分钟")
+	}
+	if c.KeepAliveIntervalMinute == 0 {
+		c.KeepAliveIntervalMinute = 1
+	}
+	if c.KeepAliveAheadMinute == 0 {
+		c.KeepAliveAheadMinute = 45
 	}
 	return nil
 }

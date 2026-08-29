@@ -3,5 +3,7 @@
   "data_root": "resource",
   "asset_root": "resource",
   "database_filename": "yyb.db",
-  "tcp_proxy": ""
+  "tcp_proxy": "",
+  "keepalive_interval_minutes": 1,
+  "keepalive_ahead_minutes": 45
 }

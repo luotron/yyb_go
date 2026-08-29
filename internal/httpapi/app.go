@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -24,15 +25,17 @@ import (
 )
 
 type Config struct {
-	ResourceRoot   string
-	AssetRoot      string
-	DBFilename     string
-	TCPProxy       string
-	SessionTTL     time.Duration
-	RequestTimeout time.Duration
-	AvatarTimeout  time.Duration
-	ScanTimeout    time.Duration
-	QRSessionTTL   time.Duration
+	ResourceRoot      string
+	AssetRoot         string
+	DBFilename        string
+	TCPProxy          string
+	SessionTTL        time.Duration
+	RequestTimeout    time.Duration
+	AvatarTimeout     time.Duration
+	ScanTimeout       time.Duration
+	QRSessionTTL      time.Duration
+	KeepAliveInterval time.Duration
+	KeepAliveAhead    time.Duration
 }
 
 type App struct {
@@ -44,6 +47,13 @@ type App struct {
 
 	mu         sync.Mutex
 	qrSessions map[string]*qr.Session
+
+	refreshLocksMu   sync.Mutex
+	refreshLocks     map[int64]*sync.Mutex
+	keepAliveRetryMu sync.Mutex
+	keepAliveRetryAt map[int64]time.Time
+	keepAliveCancel  context.CancelFunc
+	keepAliveDone    chan struct{}
 }
 
 var swaggerDocsHandler = httpSwagger.Handler(
@@ -72,6 +82,9 @@ func NewApp(cfg Config) (*App, error) {
 	if cfg.QRSessionTTL == 0 {
 		cfg.QRSessionTTL = 5 * time.Minute
 	}
+	if cfg.KeepAliveInterval > 0 && cfg.KeepAliveAhead <= 0 {
+		cfg.KeepAliveAhead = 45 * time.Minute
+	}
 	res, err := ensureResources(cfg.ResourceRoot, cfg.AssetRoot)
 	if err != nil {
 		return nil, err
@@ -91,17 +104,25 @@ func NewApp(cfg Config) (*App, error) {
 	pool := protocol.NewPool(poolCfg, db)
 
 	app := &App{
-		cfg:        cfg,
-		resources:  res,
-		db:         db,
-		pool:       pool,
-		qr:         qr.NewClient(cfg.RequestTimeout),
-		qrSessions: map[string]*qr.Session{},
+		cfg:              cfg,
+		resources:        res,
+		db:               db,
+		pool:             pool,
+		qr:               qr.NewClient(cfg.RequestTimeout),
+		qrSessions:       map[string]*qr.Session{},
+		refreshLocks:     map[int64]*sync.Mutex{},
+		keepAliveRetryAt: map[int64]time.Time{},
 	}
+	app.startKeepAlive()
 	return app, nil
 }
 
 func (a *App) Close() error {
+	if a.keepAliveCancel != nil {
+		a.keepAliveCancel()
+		<-a.keepAliveDone
+		a.keepAliveCancel = nil
+	}
 	if a.db != nil {
 		return a.db.Close()
 	}
@@ -599,22 +620,8 @@ func (a *App) storeFromScan(ctx context.Context, loginBuffer string, creds proto
 }
 
 func (a *App) refreshLiveness(ctx context.Context, acc *store.WechatAccount) string {
-	if acc.Credentials == nil {
-		_ = a.db.SetAccountStatus(ctx, acc.ID, "unknown")
-		return "unknown"
-	}
-	creds := protocol.CredentialsFromMap(acc.Credentials)
-	result, err := a.qr.RefreshLoginBuffer(ctx, creds)
-	if err != nil {
-		_ = a.db.SetAccountStatus(ctx, acc.ID, "expired")
-		return "expired"
-	}
-	_ = a.db.SetAccountCredential(ctx, acc.ID, result.LoginBuffer, result.Credentials.ToMap())
-	_ = a.db.SetAccountStatus(ctx, acc.ID, "alive")
-	if avatar := a.resolveAvatar(ctx, acc.OpenID, acc.UserInfo); avatar != "" {
-		_ = a.db.SetAccountProfile(ctx, acc.ID, acc.Nickname, &avatar, acc.UserInfo)
-	}
-	return "alive"
+	status, _, _ := a.refreshAccount(ctx, acc, false)
+	return status
 }
 
 // RefreshAccountsOnStartup 在服务启动时刷新所有账号的存活状态，
@@ -668,9 +675,12 @@ func (a *App) invokeWXApp(ctx context.Context, acc *store.WechatAccount, appID s
 		}
 		_ = a.db.InvalidateSession(ctx, acc.ID, proxy)
 	}
-	status := a.refreshLiveness(ctx, acc)
+	status, _, refreshErr := a.refreshAccount(ctx, acc, true)
 	if status != "alive" {
-		return nil, accountExpiredError{openid: acc.OpenID}
+		if status == "expired" {
+			return nil, accountExpiredError{openid: acc.OpenID}
+		}
+		return nil, fmt.Errorf("refresh account credentials: %w", refreshErr)
 	}
 	fresh, err := a.db.GetAccount(ctx, acc.ID)
 	if err == nil && fresh != nil {
