@@ -71,6 +71,25 @@ func TestScheduleRoundTrip(t *testing.T) {
 	}
 }
 
+func TestNextWakeDelayPrecision(t *testing.T) {
+	runner := newTestRunner(t)
+	writeScript(t, runner, "task.py", "print('x')")
+	if err := runner.SetSchedule("task.py", "* * * * *"); err != nil {
+		t.Fatalf("SetSchedule() error = %v", err)
+	}
+	runner.mu.Lock()
+	entry := runner.schedules["task.py"]
+	runner.mu.Unlock()
+	want := time.Until(time.Unix(entry.Next, 0))
+	if want < 0 {
+		want = 0
+	}
+	delay := runner.nextWakeDelay(time.Now())
+	if delta := delay - want; delta < -2*time.Second || delta > 2*time.Second {
+		t.Fatalf("nextWakeDelay = %v, want ≈ %v（调度应精确到秒，而非轮询间隔）", delay, want)
+	}
+}
+
 func TestRunAndLogs(t *testing.T) {
 	if _, err := exec.LookPath("python"); err != nil {
 		t.Skip("python 不可用，跳过运行测试")

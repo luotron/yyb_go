@@ -329,7 +329,7 @@ multipart 上传，字段 `file`，仅接受合法 `*.py` 文件名（≤1 MiB�
 - `PUT /scripts/{name}/schedule`，请求体 `{"cron": "32 16 * * *"}`（分 时 日 月 周，支持 `*` `,` `-` `/`）
 - `DELETE /scripts/{name}/schedule` 取消
 
-调度每分钟最多触发一次，定时任务持久化在 `data_root/scripts/schedules.json`。日与周字段同时受限时按“或”匹配。
+调度器按最近触发时刻精确计时，到点立即执行（毫秒级误差，无轮询延迟）。定时任务持久化在 `data_root/scripts/schedules.json`。日与周字段同时受限时按“或”匹配。
 
 ### 8.7 删除
 

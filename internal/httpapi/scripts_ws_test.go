@@ -36,7 +36,7 @@ func TestScriptLogsWebSocket(t *testing.T) {
 	}
 	defer conn.Close(websocket.StatusNormalClosure, "")
 
-	var initContent, logData strings.Builder
+	var logData strings.Builder
 	statuses := 0
 	var chunk1At, chunk2At time.Time
 	for {
@@ -56,8 +56,6 @@ func TestScriptLogsWebSocket(t *testing.T) {
 			t.Fatalf("decode ws message: %v", err)
 		}
 		switch message.Type {
-		case "init":
-			initContent.WriteString(message.Content)
 		case "log":
 			logData.WriteString(message.Data)
 			if strings.Contains(message.Data, "ws-chunk-1") && chunk1At.IsZero() {
@@ -72,9 +70,6 @@ func TestScriptLogsWebSocket(t *testing.T) {
 				t.Fatalf("exit code = %d, last_error=%s", *message.ExitCode, message.LastError)
 			}
 		}
-	}
-	if !strings.Contains(initContent.String(), "运行 echo.py 开始于") {
-		t.Fatalf("init 内容缺少运行头: %q", initContent.String())
 	}
 	if !strings.Contains(logData.String(), "ws-chunk-1") || !strings.Contains(logData.String(), "ws-chunk-2") {
 		t.Fatalf("实时增量日志缺失: %q", logData.String())

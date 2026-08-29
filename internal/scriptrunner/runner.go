@@ -117,6 +117,7 @@ type Runner struct {
 	schedulesPath  string
 	schedulerStop  context.CancelFunc
 	schedulerDone  chan struct{}
+	schedulerWake  chan struct{}
 	pythonResolved string
 }
 
@@ -132,6 +133,7 @@ func New(cfg Config) *Runner {
 		runs:          map[string]*runState{},
 		schedules:     map[string]scheduleEntry{},
 		schedulesPath: filepath.Join(absDir(cfg.ScriptsDir), "schedules.json"),
+		schedulerWake: make(chan struct{}, 1),
 	}
 }
 
@@ -177,17 +179,58 @@ func (r *Runner) Start() {
 	r.schedulerDone = make(chan struct{})
 	go func() {
 		defer close(r.schedulerDone)
-		ticker := time.NewTicker(15 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				r.schedulerTick()
-			}
-		}
+		r.schedulerLoop(ctx)
 	}()
+}
+
+// schedulerLoop 基于精确计时器触发：每次计算最近的下一次执行时刻，
+// 到点（或定时任务变更）才唤醒，误差为毫秒级。
+func (r *Runner) schedulerLoop(ctx context.Context) {
+	for {
+		r.schedulerTick()
+		delay := r.nextWakeDelay(time.Now())
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		case <-r.schedulerWake:
+			timer.Stop()
+		case <-timer.C:
+		}
+	}
+}
+
+// nextWakeDelay 返回距离最近一次定时触发的等待时长，无任务时上限 60 秒。
+func (r *Runner) nextWakeDelay(now time.Time) time.Duration {
+	const maxDelay = 60 * time.Second
+	var earliest int64
+	r.mu.Lock()
+	for _, entry := range r.schedules {
+		if entry.Next > 0 && (earliest == 0 || entry.Next < earliest) {
+			earliest = entry.Next
+		}
+	}
+	r.mu.Unlock()
+	if earliest == 0 {
+		return maxDelay
+	}
+	delay := time.Until(time.Unix(earliest, 0))
+	if delay < 0 {
+		return 0
+	}
+	if delay > maxDelay {
+		return maxDelay
+	}
+	return delay
+}
+
+// wake 唤醒调度循环重新计算等待时长（定时任务增删改时调用）。
+func (r *Runner) wake() {
+	select {
+	case r.schedulerWake <- struct{}{}:
+	default:
+	}
 }
 
 // Stop 停止调度循环并终止正在运行的脚本。
@@ -321,9 +364,6 @@ func (r *Runner) Run(name string) error {
 			}
 		}
 		r.finish(name, state, code, message)
-		if file, openErr := os.OpenFile(logPath, os.O_APPEND|os.O_WRONLY, 0o644); openErr == nil {
-			_ = file.Close()
-		}
 	}()
 	return nil
 }
@@ -370,6 +410,7 @@ func (r *Runner) Delete(name string) error {
 	r.mu.Lock()
 	delete(r.schedules, name)
 	r.mu.Unlock()
+	r.wake()
 	return r.saveSchedules()
 }
 
@@ -391,6 +432,7 @@ func (r *Runner) SetSchedule(name, cron string) error {
 	r.mu.Lock()
 	r.schedules[name] = scheduleEntry{Cron: schedule.Raw(), Next: next.Unix()}
 	r.mu.Unlock()
+	r.wake()
 	return r.saveSchedules()
 }
 
@@ -398,6 +440,7 @@ func (r *Runner) ClearSchedule(name string) error {
 	r.mu.Lock()
 	delete(r.schedules, name)
 	r.mu.Unlock()
+	r.wake()
 	return r.saveSchedules()
 }
 

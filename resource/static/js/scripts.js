@@ -1,10 +1,7 @@
 // 用户脚本面板：列表、运行/停止、cron 定时、上传删除、运行时日志。
 (function () {
   const $ = id => document.getElementById(id);
-  const state = {
-    scripts: [], meta: null, selected: null, follow: true, ws: null, listTimer: null,
-    runStartedAt: 0, wsConnectedAt: 0, timingPending: false, timingNote: null
-  };
+  const state = { scripts: [], meta: null, selected: null, follow: true, ws: null, listTimer: null };
 
   function escapeHTML(value) {
     return String(value ?? "")
@@ -122,8 +119,6 @@
     try {
       switch (action) {
         case "run":
-          state.runStartedAt = performance.now();
-          state.timingPending = true;
           await api("POST", "/scripts/" + encodeURIComponent(name) + "/run");
           selectScript(name);
           break;
@@ -160,18 +155,15 @@
   function selectScript(name) {
     state.selected = name;
     state.follow = true;
-    state.timingNote = null;
     $("logFollowBtn").classList.add("active");
     $("logTitle").textContent = name;
-    $("logMeta").textContent = "连接日志流…";
+    $("logMeta").textContent = "";
     connectLogStream(name);
     renderList();
   }
 
   function clearLogView() {
     state.selected = null;
-    state.timingPending = false;
-    state.timingNote = null;
     $("logTitle").textContent = "运行日志";
     $("logMeta").textContent = "选择一个脚本查看运行日志";
     $("scriptLogBox").textContent = "选择左侧脚本查看日志。";
@@ -195,11 +187,6 @@
     state.ws = socket;
 
     socket.onopen = () => {
-      if (state.timingPending) {
-        state.wsConnectedAt = performance.now();
-        $("logMeta").textContent = "运行请求已发送 · WS 已连接 +" +
-          Math.round(state.wsConnectedAt - state.runStartedAt) + "ms";
-      }
       if (!state.follow) closeLogStream();
     };
     socket.onmessage = event => {
@@ -208,12 +195,6 @@
         message = JSON.parse(event.data);
       } catch {
         return;
-      }
-      if (state.timingPending) {
-        state.timingPending = false;
-        const firstAt = Math.round(performance.now() - state.runStartedAt);
-        const wsAt = state.wsConnectedAt ? Math.round(state.wsConnectedAt - state.runStartedAt) : null;
-        state.timingNote = "点击→首条日志 " + firstAt + "ms" + (wsAt !== null ? "（WS 连接 " + wsAt + "ms）" : "");
       }
       if (message.type === "init") {
         $("scriptLogBox").textContent = message.content || "";
@@ -244,14 +225,16 @@
   }
 
   function renderLogMeta(status) {
-    const parts = [];
-    if (state.timingNote) parts.push(state.timingNote);
-    parts.push(status.running ? "运行中" : "已结束");
-    if (status.started_at) parts.push("开始 " + formatTime(status.started_at));
-    if (status.finished_at) parts.push("结束 " + formatTime(status.finished_at));
-    if (status.exit_code !== undefined && status.exit_code !== null) parts.push("退出码 " + status.exit_code);
-    if (status.last_error) parts.push(status.last_error);
-    $("logMeta").textContent = parts.join(" · ");
+    if (status.running) {
+      $("logMeta").textContent = "运行中";
+      return;
+    }
+    if (status.exit_code !== undefined && status.exit_code !== null) {
+      $("logMeta").textContent = "退出码 " + status.exit_code +
+        (status.last_error ? " · " + status.last_error : "");
+      return;
+    }
+    $("logMeta").textContent = status.last_error || "";
   }
 
   /* ---------------- 上传 ---------------- */
