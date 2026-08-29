@@ -85,7 +85,7 @@ func NewPool(cfg Config, db *store.DB) *Pool {
 }
 
 func (p *Pool) GetCode(ctx context.Context, loginBuffer, appID string, accountID int64, tcpProxy string) (map[string]any, error) {
-	return p.run(ctx, loginBuffer, accountID, tcpProxy, func(ctx context.Context, st WmpfSession) (map[string]any, error) {
+	call := func(ctx context.Context, st WmpfSession) (map[string]any, error) {
 		hostAppID := st.Session.HostAppID
 		if len(hostAppID) == 0 {
 			hostAppID = hostAppIDDefault
@@ -100,7 +100,13 @@ func (p *Pool) GetCode(ctx context.Context, loginBuffer, appID string, accountID
 			return nil, err
 		}
 		return map[string]any{"code": string(code), "errMsg": "login:ok"}, nil
-	})
+	}
+	result, err := p.run(ctx, loginBuffer, accountID, tcpProxy, call)
+	if err != nil || result["code"] != "" {
+		return result, err
+	}
+	_ = p.Invalidate(ctx, accountID, tcpProxy)
+	return p.run(ctx, loginBuffer, accountID, tcpProxy, call)
 }
 
 func (p *Pool) GetPhoneNumber(ctx context.Context, loginBuffer, appID string, accountID int64, tcpProxy string) (map[string]any, error) {

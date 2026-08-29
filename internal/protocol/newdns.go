@@ -206,10 +206,15 @@ func serversFor(parsed map[string]dnsDomain, domain, proto string) []Target {
 
 func getLonglinkTargets(ctx context.Context, timeout, cacheTTL time.Duration) ([]Target, error) {
 	parsed, err := getDNSParsed(ctx, timeout, cacheTTL, false)
-	if err != nil {
-		return nil, err
+	if err == nil {
+		if targets := serversFor(parsed, longlinkDomain, protoMMTLS); len(targets) > 0 {
+			return targets, nil
+		}
 	}
-	return serversFor(parsed, longlinkDomain, protoMMTLS), nil
+	// 部分网络会拦截微信 HTTPDNS 或返回空响应，而普通 DNS 和
+	// LongLink 443 端口仍可直连。此时让 net.Dialer（或配置的 TCP
+	// 代理）直接解析官方域名兜底。
+	return []Target{{IP: longlinkDomain, Port: 443}}, nil
 }
 
 func getShortlinkTargets(ctx context.Context, timeout, cacheTTL time.Duration) []Target {
