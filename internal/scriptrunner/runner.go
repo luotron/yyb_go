@@ -159,12 +159,18 @@ func (r *Runner) Python() string {
 	if r.pythonResolved != "" {
 		return r.pythonResolved
 	}
-	cmd := r.cfg.PythonCommand
-	if cmd == "" {
-		cmd = "python"
-	}
-	if path, err := exec.LookPath(cmd); err == nil {
-		r.pythonResolved = path
+	candidates := []string{r.cfg.PythonCommand, "python", "python3"}
+	seen := map[string]bool{}
+	for _, cmd := range candidates {
+		cmd = strings.TrimSpace(cmd)
+		if cmd == "" || seen[cmd] {
+			continue
+		}
+		seen[cmd] = true
+		if path, err := exec.LookPath(cmd); err == nil {
+			r.pythonResolved = path
+			break
+		}
 	}
 	return r.pythonResolved
 }

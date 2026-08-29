@@ -5,5 +5,7 @@
   "database_filename": "yyb.db",
   "tcp_proxy": "",
   "keepalive_interval_minutes": 1,
-  "keepalive_ahead_minutes": 45
+  "keepalive_ahead_minutes": 45,
+  "tls_cert": "certs/cert.pem",
+  "tls_key": "certs/key.pem"
 }

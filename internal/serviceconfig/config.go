@@ -24,6 +24,13 @@ type Config struct {
 	KeepAliveIntervalMinute int64  `json:"keepalive_interval_minutes"`
 	KeepAliveAheadMinute    int64  `json:"keepalive_ahead_minutes"`
 	PythonCommand           string `json:"python_command"`
+	TLSCert                 string `json:"tls_cert"`
+	TLSKey                  string `json:"tls_key"`
+}
+
+// TLSEnabled 证书与私钥同时配置时启用 HTTPS/WSS。
+func (c *Config) TLSEnabled() bool {
+	return c.TLSCert != "" && c.TLSKey != ""
 }
 
 func Load(filename string) (Config, error) {
@@ -63,6 +70,8 @@ func (c *Config) normalizeAndValidate() error {
 	c.DatabaseFilename = strings.TrimSpace(c.DatabaseFilename)
 	c.TCPProxy = strings.TrimSpace(c.TCPProxy)
 	c.PythonCommand = strings.TrimSpace(c.PythonCommand)
+	c.TLSCert = strings.TrimSpace(c.TLSCert)
+	c.TLSKey = strings.TrimSpace(c.TLSKey)
 
 	if err := validateListenAddress(c.ListenAddress); err != nil {
 		return err
@@ -84,6 +93,16 @@ func (c *Config) normalizeAndValidate() error {
 	}
 	if c.PythonCommand == "" {
 		c.PythonCommand = "python"
+	}
+	if (c.TLSCert == "") != (c.TLSKey == "") {
+		return errors.New("tls_cert 与 tls_key 必须同时配置（留空则不启用 HTTPS）")
+	}
+	if c.TLSCert != "" {
+		for _, path := range []string{c.TLSCert, c.TLSKey} {
+			if info, err := os.Stat(path); err != nil || info.IsDir() {
+				return fmt.Errorf("TLS 文件不存在: %s", path)
+			}
+		}
 	}
 	return nil
 }

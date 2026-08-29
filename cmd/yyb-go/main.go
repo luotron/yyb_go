@@ -19,15 +19,19 @@ import (
 const serviceConfigFilename = "config/service.json"
 
 // listenBaseURL 将监听地址转换为脚本环境变量 YYB_SERVER 可用的本机地址。
-func listenBaseURL(addr string) string {
+func listenBaseURL(addr string, tlsEnabled bool) string {
+	scheme := "http"
+	if tlsEnabled {
+		scheme = "https"
+	}
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil || port == "" {
-		return "http://127.0.0.1:8000"
+		return scheme + "://127.0.0.1:8000"
 	}
 	if host == "" || host == "0.0.0.0" || host == "::" {
 		host = "127.0.0.1"
 	}
-	return "http://" + net.JoinHostPort(host, port)
+	return scheme + "://" + net.JoinHostPort(host, port)
 }
 
 func main() {
@@ -56,7 +60,7 @@ func run() error {
 		KeepAliveInterval: time.Duration(fileConfig.KeepAliveIntervalMinute) * time.Minute,
 		KeepAliveAhead:    time.Duration(fileConfig.KeepAliveAheadMinute) * time.Minute,
 		PythonCommand:     fileConfig.PythonCommand,
-		ScriptsServerURL:  listenBaseURL(fileConfig.ListenAddress),
+		ScriptsServerURL:  listenBaseURL(fileConfig.ListenAddress, fileConfig.TLSEnabled()),
 	}
 
 	app, err := httpapi.NewApp(config)
@@ -78,6 +82,11 @@ func run() error {
 	}
 	serverErrors := make(chan error, 1)
 	go func() {
+		if fileConfig.TLSEnabled() {
+			log.Printf("YYB Go 已启动 (HTTPS/WSS): https://%s", server.Addr)
+			serverErrors <- server.ListenAndServeTLS(fileConfig.TLSCert, fileConfig.TLSKey)
+			return
+		}
 		log.Printf("YYB Go 已启动: http://%s", server.Addr)
 		serverErrors <- server.ListenAndServe()
 	}()

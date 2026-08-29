@@ -10,8 +10,8 @@
 .\bin\yyb-go.exe
 ```
 
-默认地址：`http://127.0.0.1:8000`  
-接口文档：`http://127.0.0.1:8000/docs/index.html`
+默认地址：`https://127.0.0.1:8000`（配置了 `certs/` 证书；留空 `tls_cert/tls_key` 则回退 `http://127.0.0.1:8000`）  
+接口文档：`https://127.0.0.1:8000/docs/index.html`
 
 程序固定读取 `config/service.json`，不读取命令行参数、环境变量或 `.env`。启动文件不再切换模式或复制配置。
 
@@ -78,18 +78,22 @@
 
 ```text
 cmd/yyb-go/main.go              服务入口
-internal/httpapi/               本地 HTTP 与 OpenAPI
+internal/httpapi/               本地 HTTP、OpenAPI 与脚本接口
 internal/protocol/              本地协议池与 verifyPlugin HostSign
 internal/crypto/                活动 HMAC 签名
 internal/qr/                    扫码客户端
+internal/scriptrunner/          用户脚本运行器与 cron 调度
 internal/store/                 本地账号与协议会话
 config/service.json             Windows 配置
 config/service.docker.json      Docker 配置
+certs/                          HTTPS 证书（cert.pem/key.pem，gitignored）
+deploy/systemd/yyb-go.service   systemd 后台运行单元
 resource/db/yyb.db              本地 SQLite 数据
 resource/avatars/               本地头像
 resource/qr/                    临时二维码图片
 resource/templates/             页面模板
 resource/static/                静态资源
+resource/scripts/               用户 Python 脚本（sdk/ 为共享 SDK，其余 gitignored）
 ```
 
 本地数据库现在只包含账号与协议会话表。旧 `features`、`account_leases`、`account_user_blacklist` 表及已过期会话已在拆分清理中移除。
@@ -99,12 +103,26 @@ resource/static/                静态资源
 | 字段 | 说明 |
 |---|---|
 | `listen_address` | 明确的 `host:port`，默认 `127.0.0.1:8000`。 |
-| `data_root` | SQLite、头像和二维码的数据根目录。 |
-| `asset_root` | 模板和静态资源根目录。 |
+| `data_root` | SQLite、头像、二维码与用户脚本的数据根目录。 |
+| `asset_root` | 模板和静态资源根目录（含脚本 SDK）。 |
 | `database_filename` | 本地 SQLite 文件名。 |
 | `tcp_proxy` | 本地协议连接使用的可选 TCP 代理。 |
+| `keepalive_interval_minutes` | 账号保活检查间隔（分钟），默认 1。 |
+| `keepalive_ahead_minutes` | 凭证过期前提前多久刷新（分钟），默认 45。 |
+| `python_command` | 用户脚本解释器，默认自动探测 `python`/`python3`。 |
+| `tls_cert` / `tls_key` | PEM 证书与私钥路径；同时配置即启用 HTTPS/WSS。 |
 
 旧 `aggregator`、`billing_config_file` 配置字段会作为未知字段拒绝加载，用于及时发现未迁移的旧配置。
+
+## 用户脚本
+
+用户开发的 `.py` 脚本放在 `resource/scripts/`（网页 `/apps` 的「用户脚本」面板可上传、运行、定时、查看实时日志）：
+
+- 脚本运行时注入 `YYB_SERVER`、`PYTHONPATH`（`resource/scripts/sdk`，内含 `yyb_sdk.py`）、`PYTHONUNBUFFERED=1` 等环境变量
+- 日志通过 WebSocket（`GET /scripts/{name}/logs/ws`）实时推送到网页
+- 定时任务支持 5 段 cron（分 时 日 月 周），调度器精确到秒，持久化于 `resource/scripts/schedules.json`
+
+详细接口见 `API文档.md` 第八节。
 
 ## 开发与构建
 
@@ -118,9 +136,71 @@ go build -trimpath -ldflags="-s -w" -o bin/yyb-go.exe ./cmd/yyb-go
 # 交叉编译 Linux amd64（bin/yyb-go-local-linux-amd64）
 $env:CGO_ENABLED="0"; $env:GOOS="linux"; $env:GOARCH="amd64"
 go build -trimpath -ldflags="-s -w" -o bin\yyb-go-local-linux-amd64 ./cmd/yyb-go
+
+# 交叉编译树莓派 5（ARM64，bin/yyb-go-linux-arm64）
+$env:CGO_ENABLED="0"; $env:GOOS="linux"; $env:GOARCH="arm64"
+go build -trimpath -ldflags="-s -w" -o bin\yyb-go-linux-arm64 ./cmd/yyb-go
 ```
 
 SQLite 驱动为纯 Go 实现（`modernc.org/sqlite`），因此可用 `CGO_ENABLED=0` 做静态编译与交叉编译。运行可执行文件时工作目录需为项目根目录（读取 `config/service.json` 与 `resource/`）。
+
+## 树莓派 5 编译与后台运行
+
+### 1. 安装 Go（64 位系统，需 Go 1.23+）
+
+```bash
+# 方式 A：官方二进制（推荐，Raspberry Pi OS 自带 apt 版本通常过旧）
+wget https://go.dev/dl/go1.23.12.linux-arm64.tar.gz
+sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf go1.23.12.linux-arm64.tar.gz
+echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc && source ~/.bashrc
+
+# 方式 B：apt（版本满足时）
+sudo apt-get update && sudo apt-get install -y golang-go
+go version   # 验证
+```
+
+### 2. 拉取代码并编译
+
+```bash
+sudo mkdir -p /opt/yyb-go && sudo chown pi:pi /opt/yyb-go
+git clone <仓库地址> /opt/yyb-go
+cd /opt/yyb-go
+go build -trimpath -ldflags="-s -w" -o yyb-go ./cmd/yyb-go
+```
+
+### 3. 补齐运行资源
+
+```bash
+cd /opt/yyb-go
+mkdir -p certs          # 放入 cert.pem / key.pem（HTTPS 用；不配置则 HTTP）
+sudo apt-get install -y python3 python3-pip
+pip3 install requests   # 用户脚本 SDK 依赖
+# 按需修改 config/service.json：局域网访问改为 "listen_address": "0.0.0.0:8000"
+```
+
+### 4. 后台运行
+
+方式 A：systemd（推荐，开机自启 + 崩溃自动重启）
+
+```bash
+sudo cp deploy/systemd/yyb-go.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now yyb-go
+journalctl -u yyb-go -f         # 查看日志
+sudo systemctl restart yyb-go   # 重启
+sudo systemctl stop yyb-go      # 停止
+```
+
+方式 B：nohup（简单，不随开机启动）
+
+```bash
+cd /opt/yyb-go
+nohup ./yyb-go > yyb.log 2>&1 &
+echo $! > yyb.pid
+kill $(cat yyb.pid)   # 停止
+```
+
+`deploy/systemd/yyb-go.service` 中 `WorkingDirectory=/opt/yyb-go`，因此 `service.json` 里的 `resource`、`certs/` 等相对路径均按该目录解析；数据（账号库、脚本、日志）全部写在 `resource/` 下，无需 root。
 
 ## Docker
 
