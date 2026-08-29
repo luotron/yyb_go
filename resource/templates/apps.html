@@ -254,6 +254,74 @@
     .headers { margin: 0; color: var(--muted); font-size: 12px; font-family: ui-monospace, Menlo, Consolas, monospace; white-space: pre-wrap; }
     .note { color: var(--faint); font-size: 12px; }
 
+    /* ---- 用户脚本 ---- */
+    .scripts-panel {
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 16px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .scripts-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .scripts-title { margin: 0; font-size: 15px; font-weight: 720; }
+
+    .scripts-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+      gap: 12px;
+      height: 460px;
+    }
+
+    .scripts-log-box {
+      margin: 0;
+      min-height: 0;
+      height: 100%;
+      padding: 12px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .script-row {
+      display: grid;
+      gap: 6px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      cursor: pointer;
+    }
+
+    .script-row:hover { background: var(--surface); }
+    .script-row.selected { border-color: var(--primary); }
+
+    .script-row-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+    .script-name { font-family: ui-monospace, Menlo, Consolas, monospace; font-weight: 700; font-size: 13px; }
+    .script-info { color: var(--muted); font-size: 12px; display: grid; gap: 2px; }
+    .script-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+    .mini-btn {
+      min-height: 26px;
+      padding: 3px 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--bg);
+      color: var(--ink);
+      font-size: 12px;
+    }
+
+    .mini-btn:hover { background: var(--surface-strong); }
+    .mini-btn.primary { background: var(--primary); border-color: var(--primary); color: oklch(1 0 0); }
+    .mini-btn.primary:hover { background: var(--primary-hover); }
+    .mini-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+    .mini-btn.active { border-color: var(--primary); color: var(--primary); }
+
+    @media (max-width: 900px) {
+      .scripts-grid { grid-template-columns: 1fr; height: auto; }
+      .scripts-log-box { height: 360px; }
+    }
+
     @media (max-width: 1180px) {
       .drawer-body { grid-template-columns: 240px minmax(0, 1fr); }
       .drawer-body .result-pane { grid-column: 1 / -1; }
@@ -280,6 +348,44 @@
   <main class="shell">
     <p class="page-lead">点击「调试接口」会打开该应用自己的接口面板。</p>
     <div id="appList"></div>
+
+    <section class="scripts-panel" aria-label="用户脚本">
+      <div class="scripts-head">
+        <div>
+          <h2 class="scripts-title">用户脚本</h2>
+          <p class="page-lead" id="scriptsMeta">加载中…</p>
+        </div>
+        <div class="inline-actions">
+          <input type="file" id="scriptFileInput" accept=".py" class="hidden">
+          <button class="btn" id="scriptUploadBtn" type="button">上传 .py</button>
+          <button class="btn" id="scriptReloadBtn" type="button">刷新</button>
+        </div>
+      </div>
+      <div class="scripts-grid">
+        <div class="pane">
+          <div class="pane-head">
+            <div>
+              <h3>脚本列表</h3>
+              <p id="scriptCount">—</p>
+            </div>
+          </div>
+          <div class="pane-body" id="scriptList"></div>
+        </div>
+        <div class="pane scripts-log-pane">
+          <div class="pane-head">
+            <div>
+              <h3 id="logTitle">运行日志</h3>
+              <p id="logMeta">选择一个脚本查看运行日志</p>
+            </div>
+            <div class="inline-actions">
+              <button class="mini-btn" id="logFollowBtn" type="button">跟随</button>
+              <button class="mini-btn" id="logRefreshBtn" type="button">刷新</button>
+            </div>
+          </div>
+          <pre class="result-box scripts-log-box" id="scriptLogBox">选择左侧脚本查看日志。</pre>
+        </div>
+      </div>
+    </section>
   </main>
 
   <div class="scrim hidden" id="scrim"></div>
@@ -383,5 +489,6 @@
   <script src="/static/js/nav.js"></script>
   <script src="/static/js/api-catalog.js"></script>
   <script src="/static/js/apps.js"></script>
+  <script src="/static/js/scripts.js?v=2"></script>
 </body>
 </html>

@@ -21,6 +21,7 @@ import (
 
 	"yyb_go/internal/protocol"
 	"yyb_go/internal/qr"
+	"yyb_go/internal/scriptrunner"
 	"yyb_go/internal/store"
 )
 
@@ -36,6 +37,8 @@ type Config struct {
 	QRSessionTTL      time.Duration
 	KeepAliveInterval time.Duration
 	KeepAliveAhead    time.Duration
+	PythonCommand     string
+	ScriptsServerURL  string
 }
 
 type App struct {
@@ -44,6 +47,7 @@ type App struct {
 	db        *store.DB
 	pool      *protocol.Pool
 	qr        *qr.Client
+	scripts   *scriptrunner.Runner
 
 	mu         sync.Mutex
 	qrSessions map[string]*qr.Session
@@ -103,12 +107,22 @@ func NewApp(cfg Config) (*App, error) {
 	poolCfg.TCPProxy = cfg.TCPProxy
 	pool := protocol.NewPool(poolCfg, db)
 
+	scripts := scriptrunner.New(scriptrunner.Config{
+		ScriptsDir:    res.Scripts,
+		SdkDir:        res.ScriptSDK,
+		LogDir:        res.ScriptLogs,
+		PythonCommand: cfg.PythonCommand,
+		ServerURL:     cfg.ScriptsServerURL,
+	})
+	scripts.Start()
+
 	app := &App{
 		cfg:              cfg,
 		resources:        res,
 		db:               db,
 		pool:             pool,
 		qr:               qr.NewClient(cfg.RequestTimeout),
+		scripts:          scripts,
 		qrSessions:       map[string]*qr.Session{},
 		refreshLocks:     map[int64]*sync.Mutex{},
 		keepAliveRetryAt: map[int64]time.Time{},
@@ -118,6 +132,9 @@ func NewApp(cfg Config) (*App, error) {
 }
 
 func (a *App) Close() error {
+	if a.scripts != nil {
+		a.scripts.Stop()
+	}
 	if a.keepAliveCancel != nil {
 		a.keepAliveCancel()
 		<-a.keepAliveDone
@@ -153,7 +170,10 @@ func (a *App) Handler() http.Handler {
 		writeJSON(c.Writer, http.StatusOK, gin.H{"ok": true})
 	})
 	router.GET("/ready", a.handleReady)
-	router.StaticFS("/static", http.Dir(a.resources.Static))
+	router.GET("/static/*filepath", func(c *gin.Context) {
+		c.Header("Cache-Control", "no-cache")
+		http.StripPrefix("/static/", http.FileServer(http.Dir(a.resources.Static))).ServeHTTP(c.Writer, c.Request)
+	})
 	router.Any("/qr", gin.WrapF(a.handleQRRoot))
 	router.Any("/qr/:session_id/image", gin.WrapF(a.handleQR))
 	router.Any("/qr/:session_id/poll", gin.WrapF(a.handleQR))
@@ -169,6 +189,16 @@ func (a *App) Handler() http.Handler {
 	router.Any("/wxapp/getPhoneNumber", gin.WrapF(a.handleGetPhoneNumber))
 	router.Any("/wxapp/operateWxData", gin.WrapF(a.handleOperateWXData))
 	router.Any("/wxapp/getHostSign", gin.WrapF(a.handleGetHostSign))
+
+	router.GET("/scripts", a.handleScriptList)
+	router.POST("/scripts/upload", a.handleScriptUpload)
+	router.POST("/scripts/:name/run", a.handleScriptRun)
+	router.POST("/scripts/:name/stop", a.handleScriptStop)
+	router.GET("/scripts/:name/logs", a.handleScriptLogs)
+	router.GET("/scripts/:name/logs/ws", gin.WrapF(a.handleScriptLogsWS))
+	router.PUT("/scripts/:name/schedule", a.handleScriptSchedule)
+	router.DELETE("/scripts/:name/schedule", a.handleScriptUnschedule)
+	router.DELETE("/scripts/:name", a.handleScriptDelete)
 
 	router.NoRoute(func(c *gin.Context) {
 		writeError(c.Writer, http.StatusNotFound, "not found")
@@ -842,6 +872,7 @@ func writeError(w http.ResponseWriter, status int, detail string) {
 }
 
 func serveFileOrText(w http.ResponseWriter, r *http.Request, path, fallback string) {
+	w.Header().Set("Cache-Control", "no-cache")
 	if _, err := os.Stat(path); err == nil {
 		http.ServeFile(w, r, path)
 		return

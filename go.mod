@@ -3,6 +3,7 @@ module yyb_go
 go 1.23.0
 
 require (
+	github.com/coder/websocket v1.8.15
 	github.com/gin-gonic/gin v1.10.1
 	github.com/swaggo/http-swagger/v2 v2.0.2
 	modernc.org/sqlite v1.38.2

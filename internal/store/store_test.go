@@ -87,3 +87,39 @@ VALUES(7, 1, 12345, '', '{"ready":true}', ?, 20, 20);
 		t.Fatalf("session blob = %#v", session.SessionBlob)
 	}
 }
+
+func TestDeleteLastAccountResetsAutoincrement(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "yyb.db")
+	db, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+	first, err := db.UpsertAccount(ctx, "openid-1", "buf", nil, nil, nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("UpsertAccount(1) error = %v", err)
+	}
+	second, err := db.UpsertAccount(ctx, "openid-2", "buf", nil, nil, nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("UpsertAccount(2) error = %v", err)
+	}
+	if first.ID != 1 || second.ID != 2 {
+		t.Fatalf("ids = %d, %d; want 1, 2", first.ID, second.ID)
+	}
+	if err = db.DeleteAccount(ctx, first.ID); err != nil {
+		t.Fatalf("DeleteAccount(1) error = %v", err)
+	}
+	if err = db.DeleteAccount(ctx, second.ID); err != nil {
+		t.Fatalf("DeleteAccount(2) error = %v", err)
+	}
+
+	third, err := db.UpsertAccount(ctx, "openid-3", "buf", nil, nil, nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("UpsertAccount(3) error = %v", err)
+	}
+	if third.ID != 1 {
+		t.Fatalf("清空后新账号 id = %d, want 1", third.ID)
+	}
+}

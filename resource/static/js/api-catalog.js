@@ -38,7 +38,18 @@
     {
       group: "小程序能力", method: "POST", path: "/wxapp/getHostSign", note: "获取插件 HostSign",
       body: { ref: "{ref}", app_id: "wx141bfb9b73c970a9", payload: { provider: "wxc3b909c3d24c5417", inner_version: 20 } }
-    }
+    },
+    { group: "脚本", method: "GET", path: "/scripts", note: "用户脚本列表与运行状态" },
+    { group: "脚本", method: "POST", path: "/scripts/{name}/run", note: "立即运行脚本" },
+    { group: "脚本", method: "POST", path: "/scripts/{name}/stop", note: "停止运行中的脚本" },
+    { group: "脚本", method: "GET", path: "/scripts/{name}/logs?limit=262144", note: "读取运行日志" },
+    { group: "脚本", method: "GET", path: "/scripts/{name}/logs/ws", note: "WebSocket 实时日志流" },
+    {
+      group: "脚本", method: "PUT", path: "/scripts/{name}/schedule", note: "设置 cron 定时（分 时 日 月 周）",
+      body: { cron: "32 16 * * *" }
+    },
+    { group: "脚本", method: "DELETE", path: "/scripts/{name}/schedule", note: "取消定时" },
+    { group: "脚本", method: "DELETE", path: "/scripts/{name}", note: "删除脚本" }
   ];
 
   window.YYB_CATALOG = {

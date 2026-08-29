@@ -260,3 +260,77 @@ sign       = HMAC-SHA256(key=signKey, message=raw).hex
 - `/client/*`
 
 号池聚合、账号租约和黑名单不属于本项目范围。
+
+## 八、用户脚本
+
+用户开发的 `.py` 脚本放在 `data_root/scripts/` 目录（网页 `/apps` 的「用户脚本」面板可上传/运行/定时/查看日志）。
+
+### 8.1 运行环境
+
+脚本运行时自动注入环境变量：
+
+- `YYB_SERVER` / `YYB_BASE_URL`：本地服务地址（`listen_address` 映射到 127.0.0.1）
+- `PYTHONPATH`：`asset_root/scripts/sdk`（内含 `yyb_sdk.py`，脚本内 `import yyb_sdk` 即可使用）
+- `YYB_SCRIPT_NAME`、`YYB_SCRIPTS_DIR`：脚本名与脚本目录
+- `PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`、`PYTHONUNBUFFERED=1`：输出按 UTF-8 编码且无缓冲，保证日志实时推送（脚本内无需手动 flush）
+
+Python 解释器由 `python_command` 配置（默认 `python`），需自行安装并确保在 PATH 中。
+
+### 8.2 `GET /scripts`
+
+返回脚本列表与运行器信息：
+
+```json
+{
+  "scripts": [
+    {
+      "name": "demo.py", "size": 2048, "updated_at": 1787983442,
+      "running": false, "exit_code": 0,
+      "schedule": "32 16 * * *", "next_run_at": 1788019320
+    }
+  ],
+  "dir": "resource/scripts",
+  "sdk_dir": "resource/scripts/sdk",
+  "server_url": "http://127.0.0.1:8000",
+  "python": "C:\\...\\python.exe",
+  "python_ok": true
+}
+```
+
+### 8.3 `POST /scripts/upload`
+
+multipart 上传，字段 `file`，仅接受合法 `*.py` 文件名（≤1 MiB）。同名冲突返回 `409`，加 `?overwrite=1` 覆盖。
+
+### 8.4 运行与停止
+
+- `POST /scripts/{name}/run`：立即运行；已在运行返回 `409`。
+- `POST /scripts/{name}/stop`：终止运行。
+
+### 8.5 日志
+
+- `GET /scripts/{name}/logs?limit=262144` 返回日志尾部（最大 256 KiB）与运行状态：
+
+```json
+{"name":"demo.py","content":"...","running":false,"exit_code":0,"last_error":""}
+```
+
+- `GET /scripts/{name}/logs/ws`（WebSocket）实时推送日志，网页日志窗口即走该通道。服务端发送 JSON 文本帧：
+
+```json
+{"type":"init","content":"当前日志全文（客户端整体替换）"}
+{"type":"log","data":"增量日志（追加）"}
+{"type":"status","running":false,"started_at":1787984419,"finished_at":1787984419,"exit_code":0,"last_error":""}
+```
+
+连接后先收到 `init` + 当前 `status`，运行中持续收到 `log` 增量；脚本结束后发送最终 `status` 并由服务端关闭连接。经 nginx 反代时需配置 `Upgrade`/`Connection` 头转发。
+
+### 8.6 定时
+
+- `PUT /scripts/{name}/schedule`，请求体 `{"cron": "32 16 * * *"}`（分 时 日 月 周，支持 `*` `,` `-` `/`）
+- `DELETE /scripts/{name}/schedule` 取消
+
+调度每分钟最多触发一次，定时任务持久化在 `data_root/scripts/schedules.json`。日与周字段同时受限时按“或”匹配。
+
+### 8.7 删除
+
+`DELETE /scripts/{name}` 删除脚本、日志与定时任务。

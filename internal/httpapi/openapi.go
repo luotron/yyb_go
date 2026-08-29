@@ -18,6 +18,7 @@ func newOpenAPISpec() map[string]any {
 			{"name": "wxapp", "description": "wxapp 业务接口调用"},
 			{"name": "calls", "description": "按账号与功能名统一调用小程序能力"},
 			{"name": "activity", "description": "活动请求签名"},
+			{"name": "scripts", "description": "用户 Python 脚本运行与定时调度"},
 		},
 		"paths": map[string]any{
 			"/health": map[string]any{
@@ -219,6 +220,97 @@ func newOpenAPISpec() map[string]any {
 					}),
 				),
 			},
+			"/scripts": map[string]any{
+				"get": openAPIOperation(
+					[]string{"scripts"},
+					"列出用户脚本及运行状态",
+					nil,
+					nil,
+					defaulted(map[string]any{
+						"200": jsonResponse("脚本列表与运行器信息。", refSchema("ScriptListResponse")),
+					}),
+				),
+				"post": openAPIOperation(
+					[]string{"scripts"},
+					"上传 .py 脚本（multipart/form-data 字段 file）",
+					[]map[string]any{boolQueryParam("overwrite", "已存在同名脚本时是否覆盖。")},
+					map[string]any{
+						"required": true,
+						"content": map[string]any{
+							"multipart/form-data": map[string]any{
+								"schema": refSchema("ScriptUploadRequest"),
+							},
+						},
+					},
+					defaulted(map[string]any{
+						"200": jsonResponse("上传结果。", refSchema("ScriptUploadResponse")),
+					}),
+				),
+			},
+			"/scripts/{name}/run": map[string]any{
+				"post": openAPIOperation(
+					[]string{"scripts"},
+					"立即运行脚本",
+					[]map[string]any{pathStringParam("name", "脚本文件名，如 demo.py。")},
+					nil,
+					defaulted(map[string]any{
+						"200": jsonResponse("脚本状态。", refSchema("ScriptInfo")),
+					}),
+				),
+			},
+			"/scripts/{name}/stop": map[string]any{
+				"post": openAPIOperation(
+					[]string{"scripts"},
+					"停止正在运行的脚本",
+					[]map[string]any{pathStringParam("name", "脚本文件名。")},
+					nil,
+					defaulted(map[string]any{
+						"200": jsonResponse("停止结果。", refSchema("ScriptStopResponse")),
+					}),
+				),
+			},
+			"/scripts/{name}/logs": map[string]any{
+				"get": openAPIOperation(
+					[]string{"scripts"},
+					"读取脚本运行日志",
+					[]map[string]any{pathStringParam("name", "脚本文件名。")},
+					nil,
+					defaulted(map[string]any{
+						"200": jsonResponse("日志内容与运行状态。", refSchema("ScriptLogsResponse")),
+					}),
+				),
+			},
+			"/scripts/{name}/schedule": map[string]any{
+				"put": openAPIOperation(
+					[]string{"scripts"},
+					"设置 cron 定时（分 时 日 月 周）",
+					[]map[string]any{pathStringParam("name", "脚本文件名。")},
+					jsonRequestBody(refSchema("ScriptScheduleRequest")),
+					defaulted(map[string]any{
+						"200": jsonResponse("含定时信息的脚本状态。", refSchema("ScriptInfo")),
+					}),
+				),
+				"delete": openAPIOperation(
+					[]string{"scripts"},
+					"取消定时",
+					[]map[string]any{pathStringParam("name", "脚本文件名。")},
+					nil,
+					defaulted(map[string]any{
+						"200": jsonResponse("取消结果。", refSchema("ScriptStopResponse")),
+					}),
+				),
+			},
+			"/scripts/{name}": map[string]any{
+				"delete": openAPIOperation(
+					[]string{"scripts"},
+					"删除脚本",
+					[]map[string]any{pathStringParam("name", "脚本文件名。")},
+					nil,
+					defaulted(map[string]any{
+						"200": jsonResponse("删除结果。", refSchema("ScriptStopResponse")),
+					}),
+				),
+			},
 		},
 		"components": map[string]any{
 			"schemas": map[string]any{
@@ -332,6 +424,50 @@ func newOpenAPISpec() map[string]any {
 				"WxappResponse": objectSchema([]string{"openid", "result"}, map[string]any{
 					"openid": map[string]any{"type": "string"},
 					"result": freeFormObjectSchema("wxapp 接口返回结果。"),
+				}),
+				"ScriptInfo": objectSchema([]string{"name", "size", "updated_at"}, map[string]any{
+					"name":        map[string]any{"type": "string", "example": "demo.py"},
+					"size":        int64Schema(),
+					"updated_at":  int64Schema(),
+					"running":     map[string]any{"type": "boolean"},
+					"started_at":  nullableInt64Schema(),
+					"finished_at": nullableInt64Schema(),
+					"exit_code":   map[string]any{"type": "integer", "nullable": true},
+					"last_error":  nullableStringSchema("上次运行的错误信息。"),
+					"schedule":    nullableStringSchema("cron 表达式。"),
+					"next_run_at": nullableInt64Schema(),
+				}),
+				"ScriptListResponse": objectSchema([]string{"scripts"}, map[string]any{
+					"scripts":    arraySchema(refSchema("ScriptInfo")),
+					"dir":        map[string]any{"type": "string", "description": "用户脚本目录。"},
+					"sdk_dir":    map[string]any{"type": "string", "description": "注入 PYTHONPATH 的 SDK 目录。"},
+					"server_url": map[string]any{"type": "string", "description": "注入脚本环境的 YYB_SERVER 地址。"},
+					"python":     map[string]any{"type": "string", "nullable": true},
+					"python_ok":  map[string]any{"type": "boolean"},
+				}),
+				"ScriptUploadRequest": objectSchema([]string{"file"}, map[string]any{
+					"file": map[string]any{"type": "string", "format": "binary", "description": "*.py 脚本文件。"},
+				}),
+				"ScriptUploadResponse": objectSchema([]string{"name", "size"}, map[string]any{
+					"name": map[string]any{"type": "string"},
+					"size": map[string]any{"type": "integer"},
+				}),
+				"ScriptScheduleRequest": objectSchema([]string{"cron"}, map[string]any{
+					"cron": map[string]any{"type": "string", "example": "32 16 * * *", "description": "5 段 cron：分 时 日 月 周。"},
+				}),
+				"ScriptLogsResponse": objectSchema([]string{"name", "content", "running"}, map[string]any{
+					"name":        map[string]any{"type": "string"},
+					"content":     map[string]any{"type": "string", "description": "最多 256 KiB 的日志尾部。"},
+					"running":     map[string]any{"type": "boolean"},
+					"started_at":  nullableInt64Schema(),
+					"finished_at": nullableInt64Schema(),
+					"exit_code":   map[string]any{"type": "integer", "nullable": true},
+					"last_error":  nullableStringSchema("上次运行的错误信息。"),
+				}),
+				"ScriptStopResponse": objectSchema(nil, map[string]any{
+					"stopped":     map[string]any{"type": "string", "nullable": true},
+					"deleted":     map[string]any{"type": "string", "nullable": true},
+					"unscheduled": map[string]any{"type": "string", "nullable": true},
 				}),
 			},
 		},

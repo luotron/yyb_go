@@ -279,8 +279,34 @@ func (db *DB) SetAccountStatus(ctx context.Context, id int64, status string) err
 }
 
 func (db *DB) DeleteAccount(ctx context.Context, id int64) error {
-	_, err := db.sql.ExecContext(ctx, "DELETE FROM wechat_accounts WHERE id=?", id)
-	return err
+	if _, err := db.sql.ExecContext(ctx, "DELETE FROM wechat_accounts WHERE id=?", id); err != nil {
+		return err
+	}
+	return db.resetAutoincrementIfEmpty(ctx)
+}
+
+// resetAutoincrementIfEmpty 在账号表清空时重置自增序列，使新账号 id 从 1 重新开始。
+func (db *DB) resetAutoincrementIfEmpty(ctx context.Context) error {
+	var count int
+	if err := db.sql.QueryRowContext(ctx, "SELECT COUNT(*) FROM wechat_accounts").Scan(&count); err != nil {
+		return err
+	}
+	if count != 0 {
+		return nil
+	}
+	for _, table := range []string{"wechat_accounts", "sessions"} {
+		exists, err := sqliteTableExists(ctx, db.sql, "sqlite_sequence")
+		if err != nil {
+			return err
+		}
+		if !exists {
+			return nil
+		}
+		if _, err := db.sql.ExecContext(ctx, "DELETE FROM sqlite_sequence WHERE name=?", table); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (db *DB) GetSession(ctx context.Context, accountID int64, tcpProxy string) (*SessionRow, error) {

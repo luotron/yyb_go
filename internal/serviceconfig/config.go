@@ -23,6 +23,7 @@ type Config struct {
 	TCPProxy                string `json:"tcp_proxy"`
 	KeepAliveIntervalMinute int64  `json:"keepalive_interval_minutes"`
 	KeepAliveAheadMinute    int64  `json:"keepalive_ahead_minutes"`
+	PythonCommand           string `json:"python_command"`
 }
 
 func Load(filename string) (Config, error) {
@@ -61,6 +62,7 @@ func (c *Config) normalizeAndValidate() error {
 	c.AssetRoot = filepath.Clean(strings.TrimSpace(c.AssetRoot))
 	c.DatabaseFilename = strings.TrimSpace(c.DatabaseFilename)
 	c.TCPProxy = strings.TrimSpace(c.TCPProxy)
+	c.PythonCommand = strings.TrimSpace(c.PythonCommand)
 
 	if err := validateListenAddress(c.ListenAddress); err != nil {
 		return err
@@ -79,6 +81,9 @@ func (c *Config) normalizeAndValidate() error {
 	}
 	if c.KeepAliveAheadMinute == 0 {
 		c.KeepAliveAheadMinute = 45
+	}
+	if c.PythonCommand == "" {
+		c.PythonCommand = "python"
 	}
 	return nil
 }

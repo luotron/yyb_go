@@ -37,6 +37,7 @@ WORKDIR /app
 COPY --from=builder --chown=10001:10001 /out/yyb-go /app/yyb-go
 COPY --chown=10001:10001 resource/templates /app/assets/templates
 COPY --chown=10001:10001 resource/static /app/assets/static
+COPY --chown=10001:10001 resource/scripts /app/assets/scripts
 COPY --chown=10001:10001 config/service.docker.json /app/config/service.json
 
 RUN mkdir -p /app/data \

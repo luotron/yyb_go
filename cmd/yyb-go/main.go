@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -16,6 +17,18 @@ import (
 )
 
 const serviceConfigFilename = "config/service.json"
+
+// listenBaseURL 将监听地址转换为脚本环境变量 YYB_SERVER 可用的本机地址。
+func listenBaseURL(addr string) string {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil || port == "" {
+		return "http://127.0.0.1:8000"
+	}
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		host = "127.0.0.1"
+	}
+	return "http://" + net.JoinHostPort(host, port)
+}
 
 func main() {
 	if err := run(); err != nil {
@@ -42,6 +55,8 @@ func run() error {
 		QRSessionTTL:      5 * time.Minute,
 		KeepAliveInterval: time.Duration(fileConfig.KeepAliveIntervalMinute) * time.Minute,
 		KeepAliveAhead:    time.Duration(fileConfig.KeepAliveAheadMinute) * time.Minute,
+		PythonCommand:     fileConfig.PythonCommand,
+		ScriptsServerURL:  listenBaseURL(fileConfig.ListenAddress),
 	}
 
 	app, err := httpapi.NewApp(config)
