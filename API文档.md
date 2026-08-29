@@ -21,9 +21,32 @@
 
 ### 1.1 认证
 
-本服务不做鉴权，所有路由均可直接调用（请自行限制监听地址或在前置网关上做访问控制）。
+配置 `admin_user` 与 `admin_password`（`config/service.json`）后启用管理员登录，除下列公开路由外，所有接口与页面均需登录：
 
-### 1.2 成功响应
+- 公开：`GET/POST /login`、`POST /logout`、`GET /health`、`GET /ready`、`/docs/*`、`/openapi.json`、`/static/*`
+- 未登录访问 API（`/accounts`、`/wxapp/*`、`/scripts/*`、`/qr/*`、`/activity/*`、`/features`、`/auth/me`）返回 HTTP `401` `{"msg":"请先登录"}`
+- 未登录访问页面（`/`、`/scan`、`/apps`）重定向到 `/login?next=<原路径>`
+
+登录成功后返回会话 Cookie（`yyb_session`，HttpOnly，默认有效期 `session_duration_minutes`=1440 分钟）：
+
+```bash
+curl -k -c cookies.txt -X POST https://127.0.0.1:8000/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"admin123456","next":"/apps"}'
+curl -k -b cookies.txt https://127.0.0.1:8000/accounts
+```
+
+- `GET /auth/me`：返回当前登录用户（`{user, session_id}`）；未启用鉴权时返回 `auth_enabled:false`
+- `POST /logout`：销毁会话并清除 Cookie
+- 连续 8 次登录失败后同一 IP 锁定 15 分钟
+
+账号密码直接配置在 `service.json` 的 `admin_user`/`admin_password` 中，修改后重启生效；登录会话保存在服务内存中，重启服务后所有会话失效需重新登录。
+
+### 1.2 自动化调用（integration_token）
+
+配置 `integration_token` 后，自动化脚本（Python SDK/青龙等）可免登录调用 API——请求携带请求头 `X-Integration-Token: <token>` 即视为管理员。本服务运行用户脚本时会自动注入环境变量 `YYB_INTEGRATION_TOKEN`，SDK 会自动附加该头。
+
+### 1.3 成功响应
 
 除二维码图片、Swagger 静态内容和原始 OpenAPI JSON 外，成功响应为：
 
@@ -35,7 +58,7 @@
 }
 ```
 
-### 1.3 失败响应
+### 1.4 失败响应
 
 ```json
 {
@@ -45,9 +68,9 @@
 }
 ```
 
-常见状态：`400` 参数错误，`404` 资源不存在，`409` 本地账号状态冲突，`502` 上游协议失败。
+常见状态：`400` 参数错误，`401` 未登录，`404` 资源不存在，`409` 本地账号状态冲突，`502` 上游协议失败。
 
-### 1.4 本地账号 ref
+### 1.5 本地账号 ref
 
 需要 `ref` 的接口接受以下任一值：
 

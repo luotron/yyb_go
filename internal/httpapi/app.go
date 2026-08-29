@@ -39,6 +39,11 @@ type Config struct {
 	KeepAliveAhead    time.Duration
 	PythonCommand     string
 	ScriptsServerURL  string
+	AdminUser         string
+	AdminPassword     string
+	SessionDuration   time.Duration
+	CookieSecure      bool
+	IntegrationToken  string
 }
 
 type App struct {
@@ -58,6 +63,11 @@ type App struct {
 	keepAliveRetryAt map[int64]time.Time
 	keepAliveCancel  context.CancelFunc
 	keepAliveDone    chan struct{}
+
+	loginMu       sync.Mutex
+	loginAttempts map[string]loginAttempt
+	sessionMu     sync.Mutex
+	sessions      map[string]adminSession
 }
 
 var swaggerDocsHandler = httpSwagger.Handler(
@@ -89,6 +99,9 @@ func NewApp(cfg Config) (*App, error) {
 	if cfg.KeepAliveInterval > 0 && cfg.KeepAliveAhead <= 0 {
 		cfg.KeepAliveAhead = 45 * time.Minute
 	}
+	if cfg.SessionDuration == 0 {
+		cfg.SessionDuration = 24 * time.Hour
+	}
 	res, err := ensureResources(cfg.ResourceRoot, cfg.AssetRoot)
 	if err != nil {
 		return nil, err
@@ -108,11 +121,12 @@ func NewApp(cfg Config) (*App, error) {
 	pool := protocol.NewPool(poolCfg, db)
 
 	scripts := scriptrunner.New(scriptrunner.Config{
-		ScriptsDir:    res.Scripts,
-		SdkDir:        res.ScriptSDK,
-		LogDir:        res.ScriptLogs,
-		PythonCommand: cfg.PythonCommand,
-		ServerURL:     cfg.ScriptsServerURL,
+		ScriptsDir:       res.Scripts,
+		SdkDir:           res.ScriptSDK,
+		LogDir:           res.ScriptLogs,
+		PythonCommand:    cfg.PythonCommand,
+		ServerURL:        cfg.ScriptsServerURL,
+		IntegrationToken: cfg.IntegrationToken,
 	})
 	scripts.Start()
 
@@ -126,6 +140,8 @@ func NewApp(cfg Config) (*App, error) {
 		qrSessions:       map[string]*qr.Session{},
 		refreshLocks:     map[int64]*sync.Mutex{},
 		keepAliveRetryAt: map[int64]time.Time{},
+		loginAttempts:    map[string]loginAttempt{},
+		sessions:         map[string]adminSession{},
 	}
 	app.startKeepAlive()
 	return app, nil
@@ -158,14 +174,9 @@ func (a *App) Handler() http.Handler {
 		SkipPaths: []string{"/health", "/ready"},
 	}), gin.Recovery())
 
-	router.Any("/", gin.WrapF(a.handleIndex))
-	router.Any("/scan", gin.WrapF(a.handleScan))
-	router.Any("/apps", gin.WrapF(a.handleApps))
-	router.Any("/docs", func(c *gin.Context) {
-		c.Redirect(http.StatusMovedPermanently, "/docs/index.html")
-	})
-	router.Any("/docs/*path", gin.WrapF(a.handleDocs))
-	router.Any("/openapi.json", gin.WrapF(a.handleOpenAPI))
+	// 公开路由（登录页、健康检查、静态资源、文档）
+	router.Any("/login", gin.WrapF(a.handleLogin))
+	router.POST("/logout", gin.WrapF(a.handleLogout))
 	router.GET("/health", func(c *gin.Context) {
 		writeJSON(c.Writer, http.StatusOK, gin.H{"ok": true})
 	})
@@ -174,31 +185,44 @@ func (a *App) Handler() http.Handler {
 		c.Header("Cache-Control", "no-cache")
 		http.StripPrefix("/static/", http.FileServer(http.Dir(a.resources.Static))).ServeHTTP(c.Writer, c.Request)
 	})
-	router.Any("/qr", gin.WrapF(a.handleQRRoot))
-	router.Any("/qr/:session_id/image", gin.WrapF(a.handleQR))
-	router.Any("/qr/:session_id/poll", gin.WrapF(a.handleQR))
-	router.Any("/qr/:session_id/confirm", gin.WrapF(a.handleQR))
-	router.Any("/accounts", gin.WrapF(a.handleAccountsRoot))
-	router.Any("/accounts/avatar", gin.WrapF(a.handleAccountAvatar))
-	router.Any("/accounts/refresh", gin.WrapF(a.handleAccountRefresh))
-	router.Any("/accounts/resync", gin.WrapF(a.handleAccountResync))
-	router.Any("/accounts/:ref/call", gin.WrapF(a.handleAccountCall))
-	router.Any("/features", gin.WrapF(a.handleFeatures))
-	router.Any("/activity/sign", gin.WrapF(a.handleActivitySign))
-	router.Any("/wxapp/getCode", gin.WrapF(a.handleGetCode))
-	router.Any("/wxapp/getPhoneNumber", gin.WrapF(a.handleGetPhoneNumber))
-	router.Any("/wxapp/operateWxData", gin.WrapF(a.handleOperateWXData))
-	router.Any("/wxapp/getHostSign", gin.WrapF(a.handleGetHostSign))
+	router.Any("/docs", func(c *gin.Context) {
+		c.Redirect(http.StatusMovedPermanently, "/docs/index.html")
+	})
+	router.Any("/docs/*path", gin.WrapF(a.handleDocs))
+	router.Any("/openapi.json", gin.WrapF(a.handleOpenAPI))
 
-	router.GET("/scripts", a.handleScriptList)
-	router.POST("/scripts/upload", a.handleScriptUpload)
-	router.POST("/scripts/:name/run", a.handleScriptRun)
-	router.POST("/scripts/:name/stop", a.handleScriptStop)
-	router.GET("/scripts/:name/logs", a.handleScriptLogs)
-	router.GET("/scripts/:name/logs/ws", gin.WrapF(a.handleScriptLogsWS))
-	router.PUT("/scripts/:name/schedule", a.handleScriptSchedule)
-	router.DELETE("/scripts/:name/schedule", a.handleScriptUnschedule)
-	router.DELETE("/scripts/:name", a.handleScriptDelete)
+	// 受保护路由（未登录：API 返回 401，页面重定向到 /login）
+	protected := router.Group("")
+	protected.Use(a.requireBrowserSession())
+	protected.GET("/auth/me", gin.WrapF(a.handleAuthMe))
+	protected.Any("/", gin.WrapF(a.handleIndex))
+	protected.Any("/scan", gin.WrapF(a.handleScan))
+	protected.Any("/apps", gin.WrapF(a.handleApps))
+	protected.Any("/qr", gin.WrapF(a.handleQRRoot))
+	protected.Any("/qr/:session_id/image", gin.WrapF(a.handleQR))
+	protected.Any("/qr/:session_id/poll", gin.WrapF(a.handleQR))
+	protected.Any("/qr/:session_id/confirm", gin.WrapF(a.handleQR))
+	protected.Any("/accounts", gin.WrapF(a.handleAccountsRoot))
+	protected.Any("/accounts/avatar", gin.WrapF(a.handleAccountAvatar))
+	protected.Any("/accounts/refresh", gin.WrapF(a.handleAccountRefresh))
+	protected.Any("/accounts/resync", gin.WrapF(a.handleAccountResync))
+	protected.Any("/accounts/:ref/call", gin.WrapF(a.handleAccountCall))
+	protected.Any("/features", gin.WrapF(a.handleFeatures))
+	protected.Any("/activity/sign", gin.WrapF(a.handleActivitySign))
+	protected.Any("/wxapp/getCode", gin.WrapF(a.handleGetCode))
+	protected.Any("/wxapp/getPhoneNumber", gin.WrapF(a.handleGetPhoneNumber))
+	protected.Any("/wxapp/operateWxData", gin.WrapF(a.handleOperateWXData))
+	protected.Any("/wxapp/getHostSign", gin.WrapF(a.handleGetHostSign))
+
+	protected.GET("/scripts", a.handleScriptList)
+	protected.POST("/scripts/upload", a.handleScriptUpload)
+	protected.POST("/scripts/:name/run", a.handleScriptRun)
+	protected.POST("/scripts/:name/stop", a.handleScriptStop)
+	protected.GET("/scripts/:name/logs", a.handleScriptLogs)
+	protected.GET("/scripts/:name/logs/ws", gin.WrapF(a.handleScriptLogsWS))
+	protected.PUT("/scripts/:name/schedule", a.handleScriptSchedule)
+	protected.DELETE("/scripts/:name/schedule", a.handleScriptUnschedule)
+	protected.DELETE("/scripts/:name", a.handleScriptDelete)
 
 	router.NoRoute(func(c *gin.Context) {
 		writeError(c.Writer, http.StatusNotFound, "not found")

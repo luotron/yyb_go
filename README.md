@@ -111,8 +111,23 @@ resource/scripts/               用户 Python 脚本（sdk/ 为共享 SDK，其�
 | `keepalive_ahead_minutes` | 凭证过期前提前多久刷新（分钟），默认 45。 |
 | `python_command` | 用户脚本解释器，默认自动探测 `python`/`python3`。 |
 | `tls_cert` / `tls_key` | PEM 证书与私钥路径；同时配置即启用 HTTPS/WSS。 |
+| `admin_user` / `admin_password` | 同时配置即启用管理员登录，首次启动时创建初始管理员。 |
+| `session_duration_minutes` | 登录会话有效期（分钟），默认 1440。 |
+| `cookie_secure` | 会话 Cookie 是否加 Secure 标记（纯 HTTPS 部署可开 true）。 |
+| `integration_token` | 可选，自动化调用免登录令牌（请求头 `X-Integration-Token`）。 |
 
 旧 `aggregator`、`billing_config_file` 配置字段会作为未知字段拒绝加载，用于及时发现未迁移的旧配置。
+
+### 管理员登录
+
+配置 `admin_user`/`admin_password` 后，除 `/login`、`/health`、`/ready`、`/docs/*`、`/static/*` 外所有页面与接口均需登录：
+
+- 未登录访问页面重定向到 `/login`，API 返回 401
+- 登录成功后发放 `yyb_session` Cookie（HttpOnly，默认 24 小时）
+- 自动化脚本通过 `integration_token`（请求头 `X-Integration-Token`）免登录调用；服务运行用户脚本时自动注入 `YYB_INTEGRATION_TOKEN`，SDK 自动携带
+- 左侧导航栏登录后出现「退出登录」入口
+
+密码直接配置在 `service.json`（明文），登录会话保存在服务内存中（重启后全部失效）；`integration_token` 免登录头不受重启影响。修改 `admin_user`/`admin_password` 后重启即生效。
 
 ## 用户脚本
 

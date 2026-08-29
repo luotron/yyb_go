@@ -59,6 +59,8 @@ class YYBClient:
         if verify is None:
             verify = self._default_verify(base)
         self.session.verify = verify
+        # 鉴权绕过：服务端配置 integration_token 时，脚本通过该头免登录调用 API
+        self.integration_token = (os.getenv("YYB_INTEGRATION_TOKEN") or "").strip()
         if not verify:
             try:
                 import urllib3
@@ -93,12 +95,16 @@ class YYBClient:
         params: Optional[dict] = None,
     ) -> dict:
         url = self.base_url + path
+        headers = {}
+        if self.integration_token:
+            headers["X-Integration-Token"] = self.integration_token
         try:
             resp = self.session.request(
                 method,
                 url,
                 json=json_body,
                 params=params,
+                headers=headers,
                 timeout=self.timeout,
             )
         except requests.RequestException as exc:

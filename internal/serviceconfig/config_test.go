@@ -46,6 +46,33 @@ func TestLoadRejectsInvalidConfig(t *testing.T) {
 	}
 }
 
+func TestLoadAdminConfig(t *testing.T) {
+	path := writeConfig(t, `{
+		"listen_address":"127.0.0.1:8000",
+		"data_root":"resource",
+		"asset_root":"resource",
+		"database_filename":"yyb.db",
+		"tcp_proxy":"",
+		"admin_user":"admin",
+		"admin_password":"secret",
+		"integration_token":"tok"
+	}`)
+	config, err := Load(path)
+	if err != nil {
+		t.Fatalf("读取管理员配置失败: %v", err)
+	}
+	if config.AdminUser != "admin" || config.SessionDurationMinute != 1440 {
+		t.Fatalf("配置内容错误: %+v", config)
+	}
+}
+
+func TestLoadRejectsIncompleteAdminConfig(t *testing.T) {
+	_, err := Load(writeConfig(t, validConfig(`,"admin_user":"admin"`)))
+	if err == nil || !strings.Contains(err.Error(), "admin_user") {
+		t.Fatalf("错误=%v，期望 admin_user 校验", err)
+	}
+}
+
 func validConfig(extra string) string {
 	return `{
 		"listen_address":"127.0.0.1:8000",

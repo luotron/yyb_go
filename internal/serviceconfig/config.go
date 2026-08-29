@@ -26,6 +26,11 @@ type Config struct {
 	PythonCommand           string `json:"python_command"`
 	TLSCert                 string `json:"tls_cert"`
 	TLSKey                  string `json:"tls_key"`
+	AdminUser               string `json:"admin_user"`
+	AdminPassword           string `json:"admin_password"`
+	SessionDurationMinute   int64  `json:"session_duration_minutes"`
+	CookieSecure            bool   `json:"cookie_secure"`
+	IntegrationToken        string `json:"integration_token"`
 }
 
 // TLSEnabled 证书与私钥同时配置时启用 HTTPS/WSS。
@@ -72,6 +77,9 @@ func (c *Config) normalizeAndValidate() error {
 	c.PythonCommand = strings.TrimSpace(c.PythonCommand)
 	c.TLSCert = strings.TrimSpace(c.TLSCert)
 	c.TLSKey = strings.TrimSpace(c.TLSKey)
+	c.AdminUser = strings.TrimSpace(c.AdminUser)
+	c.AdminPassword = strings.TrimSpace(c.AdminPassword)
+	c.IntegrationToken = strings.TrimSpace(c.IntegrationToken)
 
 	if err := validateListenAddress(c.ListenAddress); err != nil {
 		return err
@@ -103,6 +111,15 @@ func (c *Config) normalizeAndValidate() error {
 				return fmt.Errorf("TLS 文件不存在: %s", path)
 			}
 		}
+	}
+	if (c.AdminUser == "") != (c.AdminPassword == "") {
+		return errors.New("admin_user 与 admin_password 必须同时配置（留空则不启用登录鉴权）")
+	}
+	if c.SessionDurationMinute < 0 {
+		return errors.New("session_duration_minutes 必须是非负整数")
+	}
+	if c.SessionDurationMinute == 0 {
+		c.SessionDurationMinute = 1440
 	}
 	return nil
 }
