@@ -107,6 +107,8 @@ resource/static/                静态资源
 | `keepalive_ahead_minutes` | 凭证过期前提前多久刷新（分钟），默认 45。 |
 | `python_command` | 用户脚本解释器，默认自动探测 `python`/`python3`。 |
 | `tls_cert` / `tls_key` | PEM 证书与私钥路径；同时配置即启用 HTTPS/WSS。 |
+
+> 通过 nginx 终结 HTTPS/WSS + acme.sh 自动签发续期证书的完整部署方案见 `deploy/NGINX-ACME部署.md`。
 | `admin_user` / `admin_password` | 同时配置即启用管理员登录，首次启动时创建初始管理员。 |
 | `session_duration_minutes` | 登录会话有效期（分钟），默认 1440。 |
 | `cookie_secure` | 会话 Cookie 是否加 Secure 标记（纯 HTTPS 部署可开 true）。 |
