@@ -24,11 +24,6 @@ type Config struct {
 	KeepAliveIntervalMinute int64  `json:"keepalive_interval_minutes"`
 	KeepAliveAheadMinute    int64  `json:"keepalive_ahead_minutes"`
 	PythonCommand           string `json:"python_command"`
-	AdminUser               string `json:"admin_user"`
-	AdminPassword           string `json:"admin_password"`
-	SessionDurationMinute   int64  `json:"session_duration_minutes"`
-	CookieSecure            bool   `json:"cookie_secure"`
-	IntegrationToken        string `json:"integration_token"`
 }
 
 func Load(filename string) (Config, error) {

@@ -58,26 +58,6 @@
     spacer.className = "rail-spacer";
     rail.appendChild(spacer);
 
-    // 登录用户显示退出入口
-    fetch("/auth/me").then(response => response.json()).then(payload => {
-      if (payload.code !== 0) return;
-      const data = payload.data || {};
-      if (!data.user) return;
-      const logout = document.createElement("a");
-      logout.className = "rail-item";
-      logout.href = "#";
-      logout.title = "退出登录（" + (data.user.display_name || data.user.username) + "）";
-      logout.setAttribute("aria-label", "退出登录");
-      logout.innerHTML =
-        '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M10 17l5-5-5-5M15 12H3"/></svg>' +
-        '<span class="rail-tip">退出登录</span>';
-      logout.addEventListener("click", event => {
-        event.preventDefault();
-        fetch("/logout", { method: "POST" }).then(() => { location.href = "/login"; });
-      });
-      rail.appendChild(logout);
-    }).catch(() => {});
-
     document.body.insertBefore(rail, document.body.firstChild);
   }
 

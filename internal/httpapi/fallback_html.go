@@ -86,5 +86,3 @@ const docsHTML = `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta 
 <p>Swagger UI: <a href="/docs/index.html">/docs/index.html</a></p>
 <p>OpenAPI JSON: <a href="/openapi.json">/openapi.json</a></p>
 </body></html>`
-
-const fallbackLoginHTML = `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>登录 - YYB Go</title><body><main><h1>YYB Go 登录</h1><p>资源模板未找到，请检查 <code>resource/templates/login.html</code>。</p></main></body></html>`

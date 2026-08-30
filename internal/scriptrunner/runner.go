@@ -23,12 +23,11 @@ var validScriptName = regexp.MustCompile(`^[\p{L}\p{N}][\p{L}\p{N}._-]{0,127}\.p
 func ValidName(name string) bool { return validScriptName.MatchString(name) }
 
 type Config struct {
-	ScriptsDir       string
-	SdkDir           string
-	LogDir           string
-	PythonCommand    string
-	ServerURL        string
-	IntegrationToken string
+	ScriptsDir    string
+	SdkDir        string
+	LogDir        string
+	PythonCommand string
+	ServerURL     string
 }
 
 type Script struct {
@@ -125,12 +124,11 @@ type Runner struct {
 func New(cfg Config) *Runner {
 	return &Runner{
 		cfg: Config{
-			ScriptsDir:       absDir(cfg.ScriptsDir),
-			SdkDir:           absDir(cfg.SdkDir),
-			LogDir:           absDir(cfg.LogDir),
-			PythonCommand:    cfg.PythonCommand,
-			ServerURL:        cfg.ServerURL,
-			IntegrationToken: cfg.IntegrationToken,
+			ScriptsDir:    absDir(cfg.ScriptsDir),
+			SdkDir:        absDir(cfg.SdkDir),
+			LogDir:        absDir(cfg.LogDir),
+			PythonCommand: cfg.PythonCommand,
+			ServerURL:     cfg.ServerURL,
 		},
 		runs:          map[string]*runState{},
 		schedules:     map[string]scheduleEntry{},
@@ -499,9 +497,6 @@ func (r *Runner) scriptEnv(name string) []string {
 	}
 	env = append(env, "YYB_SCRIPT_NAME="+name, "YYB_SCRIPTS_DIR="+r.cfg.ScriptsDir)
 	env = append(env, "PYTHONUTF8=1", "PYTHONIOENCODING=utf-8", "PYTHONUNBUFFERED=1")
-	if r.cfg.IntegrationToken != "" {
-		env = append(env, "YYB_INTEGRATION_TOKEN="+r.cfg.IntegrationToken)
-	}
 	if r.cfg.SdkDir != "" {
 		if _, err := os.Stat(r.cfg.SdkDir); err == nil {
 			pythonPath := r.cfg.SdkDir

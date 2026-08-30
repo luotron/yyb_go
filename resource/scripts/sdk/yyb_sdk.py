@@ -66,16 +66,12 @@ class YYBClient:
         params: Optional[dict] = None,
     ) -> dict:
         url = self.base_url + path
-        headers = {}
-        if self.integration_token:
-            headers["X-Integration-Token"] = self.integration_token
         try:
             resp = self.session.request(
                 method,
                 url,
                 json=json_body,
                 params=params,
-                headers=headers,
                 timeout=self.timeout,
             )
         except requests.RequestException as exc:
