@@ -1,21 +1,6 @@
 # 本地账号服务 API
 
-默认地址：`https://127.0.0.1:8000`。本项目仅包含二维码、本地账号和本地小程序调用；聚合及租约接口位于独立聚合项目。
-
-### HTTPS/WSS 配置
-
-`config/service.json` 中同时配置 `tls_cert` 与 `tls_key`（PEM 证书与私钥路径）即启用 HTTPS/WSS，留空则回退为 HTTP/WS：
-
-```json
-{
-  "tls_cert": "C:/path/to/cert.pem",
-  "tls_key": "C:/path/to/key.pem"
-}
-```
-
-- 网页日志窗口的 WebSocket 自动使用 `wss://`（跟随页面协议），无需额外配置
-- 服务端向脚本注入的 `YYB_SERVER` 自动使用 `https://` 前缀
-- Python SDK（`yyb_sdk.YYBClient`）对本机地址（127.0.0.1/localhost）默认跳过证书校验以兼容自签名证书，可用环境变量 `YYB_SSL_VERIFY=1` 强制校验
+默认地址：`http://127.0.0.1:8000`。本项目仅包含二维码、本地账号和本地小程序调用；聚合及租约接口位于独立聚合项目。
 
 ## 一、通用约定
 

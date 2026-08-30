@@ -6,8 +6,6 @@
   "tcp_proxy": "",
   "keepalive_interval_minutes": 1,
   "keepalive_ahead_minutes": 45,
-  "tls_cert": "certs/cert.pem",
-  "tls_key": "certs/key.pem",
   "admin_user": "admin",
   "admin_password": "qwer123456",
   "session_duration_minutes": 1440,

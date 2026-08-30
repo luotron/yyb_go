@@ -47,7 +47,6 @@ class YYBClient:
         ref: Optional[str] = None,
         timeout: float = 20,
         session: Optional[requests.Session] = None,
-        verify: Optional[bool] = None,
     ) -> None:
         base = base_url.strip().rstrip("/")
         if not base.startswith("http://") and not base.startswith("https://"):
@@ -56,34 +55,6 @@ class YYBClient:
         self.ref = ref
         self.timeout = timeout
         self.session = session or requests.Session()
-        if verify is None:
-            verify = self._default_verify(base)
-        self.session.verify = verify
-        # 鉴权绕过：服务端配置 integration_token 时，脚本通过该头免登录调用 API
-        self.integration_token = (os.getenv("YYB_INTEGRATION_TOKEN") or "").strip()
-        if not verify:
-            try:
-                import urllib3
-
-                urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-            except ImportError:
-                pass
-
-    @staticmethod
-    def _default_verify(base_url: str) -> bool:
-        """自签名证书场景：本机地址默认跳过证书校验，可用 YYB_SSL_VERIFY 覆盖。"""
-        raw = (os.getenv("YYB_SSL_VERIFY") or "").strip().lower()
-        if raw in ("0", "false", "no", "off"):
-            return False
-        if raw in ("1", "true", "yes", "on"):
-            return True
-        try:
-            from urllib.parse import urlparse
-
-            host = urlparse(base_url).hostname or ""
-        except ImportError:
-            host = ""
-        return host not in ("127.0.0.1", "localhost", "::1")
 
     # ---------- 通用请求 ----------
 
