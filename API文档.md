@@ -6,30 +6,36 @@
 
 ### 1.1 认证
 
-配置 `admin_user` 与 `admin_password`（`config/service.json`）后启用管理员登录，除下列公开路由外，所有接口与页面均需登录：
+配置 `secret_key`（`config/service.json`）后启用访问验证，除下列公开路由外，所有接口与页面均需验证：
 
 - 公开：`GET/POST /login`、`POST /logout`、`GET /health`、`GET /ready`、`/docs/*`、`/openapi.json`、`/static/*`
-- 未登录访问 API（`/accounts`、`/wxapp/*`、`/scripts/*`、`/qr/*`、`/activity/*`、`/features`、`/auth/me`）返回 HTTP `401` `{"msg":"请先登录"}`
-- 未登录访问页面（`/`、`/scan`、`/apps`）重定向到 `/login?next=<原路径>`
+- 未验证访问 API（`/accounts`、`/wxapp/*`、`/scripts/*`、`/qr/*`、`/activity/*`、`/features`、`/auth/me`）返回 HTTP `401` `{"msg":"请先登录"}`
+- 未验证访问页面（`/`、`/scan`、`/apps`）重定向到 `/login?next=<原路径>`
 
-登录成功后返回会话 Cookie（`yyb_session`，HttpOnly，默认有效期 `session_duration_minutes`=1440 分钟）：
+**网页**：首次访问在登录页输入 secret key，通过后返回会话 Cookie（`yyb_session`，HttpOnly，默认有效期 `session_duration_minutes`=1440 分钟），后续无需再输入：
 
 ```bash
 curl -k -c cookies.txt -X POST https://127.0.0.1:8000/login \
   -H 'Content-Type: application/json' \
-  -d '{"username":"admin","password":"admin123456","next":"/apps"}'
+  -d '{"secret_key":"qwer123456","next":"/apps"}'
 curl -k -b cookies.txt https://127.0.0.1:8000/accounts
 ```
 
-- `GET /auth/me`：返回当前登录用户（`{user, session_id}`）；未启用鉴权时返回 `auth_enabled:false`
+**API**：请求头携带 `X-Secret-Key: <secret_key>` 即放行：
+
+```bash
+curl -k -H 'X-Secret-Key: qwer123456' https://127.0.0.1:8000/accounts
+```
+
+- `GET /auth/me`：返回当前验证用户（`{user}`）；未启用鉴权时返回 `auth_enabled:false`
 - `POST /logout`：销毁会话并清除 Cookie
-- 连续 8 次登录失败后同一 IP 锁定 15 分钟
+- 连续 8 次验证失败后同一 IP 锁定 15 分钟
 
-账号密码直接配置在 `service.json` 的 `admin_user`/`admin_password` 中，修改后重启生效；登录会话保存在服务内存中，重启服务后所有会话失效需重新登录。
+secret key 直接配置在 `service.json` 的 `secret_key` 中，修改后重启生效；网页验证会话保存在服务内存中，重启服务后需重新输入。
 
-### 1.2 自动化调用（integration_token）
+### 1.2 脚本调用（免验证）
 
-配置 `integration_token` 后，自动化脚本（Python SDK/青龙等）可免登录调用 API——请求携带请求头 `X-Integration-Token: <token>` 即视为管理员。本服务运行用户脚本时会自动注入环境变量 `YYB_INTEGRATION_TOKEN`，SDK 会自动附加该头。
+服务运行 `resource/scripts/` 下的用户脚本时自动注入环境变量 `YYB_SECRET_KEY`，Python SDK（`yyb_sdk.YYBClient`）自动携带 `X-Secret-Key` 请求头，脚本内无需任何额外处理。
 
 ### 1.3 成功响应
 

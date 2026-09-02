@@ -109,8 +109,9 @@ server {
         proxy_send_timeout 70s;
     }
 
-    # 脚本日志 WebSocket（wss://）
-    location /scripts/ {
+    # 脚本接口与日志 WebSocket（wss://）
+    # 注意：不能用 location /scripts/ 前缀，否则 nginx 会把 /scripts 请求 301 到 /scripts/
+    location /scripts {
         proxy_pass http://127.0.0.1:8001;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;

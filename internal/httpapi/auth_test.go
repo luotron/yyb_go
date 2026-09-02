@@ -18,8 +18,7 @@ func newAuthTestApp(t *testing.T) *App {
 		AvatarTimeout:   time.Second,
 		SessionTTL:      time.Minute,
 		QRSessionTTL:    time.Minute,
-		AdminUser:       "admin",
-		AdminPassword:   "secret-pass",
+		SecretKey:       "secret-pass",
 		SessionDuration: time.Hour,
 	})
 	if err != nil {
@@ -51,13 +50,13 @@ func TestAuthFlow(t *testing.T) {
 	}
 
 	// 错误密码 -> 401
-	recorder = postJSON(handler, "/login", map[string]any{"username": "admin", "password": "wrong-pass"})
+	recorder = postJSON(handler, "/login", map[string]any{"secret_key": "wrong-pass"})
 	if recorder.Code != http.StatusUnauthorized {
 		t.Fatalf("错误密码 status = %d", recorder.Code)
 	}
 
 	// 正确登录 -> 拿到会话 cookie
-	recorder = postJSON(handler, "/login", map[string]any{"username": "admin", "password": "secret-pass", "next": "/apps"})
+	recorder = postJSON(handler, "/login", map[string]any{"secret_key": "secret-pass", "next": "/apps"})
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("登录 status = %d body=%s", recorder.Code, recorder.Body.String())
 	}
@@ -116,9 +115,9 @@ func TestAuthFlow(t *testing.T) {
 	}
 }
 
-func TestIntegrationTokenBypass(t *testing.T) {
+func TestSecretKeyHeaderBypass(t *testing.T) {
 	app := newAuthTestApp(t)
-	app.cfg.IntegrationToken = "test-token-123"
+	app.cfg.SecretKey = "secret-pass"
 	handler := app.Handler()
 
 	// 无 token -> 401
@@ -130,7 +129,7 @@ func TestIntegrationTokenBypass(t *testing.T) {
 
 	// 带正确 token -> 200
 	request := httptest.NewRequest(http.MethodGet, "/accounts", nil)
-	request.Header.Set("X-Integration-Token", "test-token-123")
+	request.Header.Set("X-Secret-Key", "secret-pass")
 	recorder = httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusOK {
@@ -165,12 +164,12 @@ func TestLoginRateLimit(t *testing.T) {
 	app := newAuthTestApp(t)
 	handler := app.Handler()
 	for i := 0; i < 8; i++ {
-		recorder := postJSON(handler, "/login", map[string]any{"username": "admin", "password": "wrong"})
+		recorder := postJSON(handler, "/login", map[string]any{"secret_key": "wrong"})
 		if recorder.Code != http.StatusUnauthorized {
 			t.Fatalf("第 %d 次错误密码 status = %d", i+1, recorder.Code)
 		}
 	}
-	recorder := postJSON(handler, "/login", map[string]any{"username": "admin", "password": "secret-pass"})
+	recorder := postJSON(handler, "/login", map[string]any{"secret_key": "secret-pass"})
 	if recorder.Code != http.StatusTooManyRequests {
 		t.Fatalf("连续失败后 status = %d，期望 429", recorder.Code)
 	}

@@ -57,11 +57,9 @@ func run() error {
 		KeepAliveAhead:    time.Duration(fileConfig.KeepAliveAheadMinute) * time.Minute,
 		PythonCommand:     fileConfig.PythonCommand,
 		ScriptsServerURL:  listenBaseURL(fileConfig.ListenAddress),
-		AdminUser:         fileConfig.AdminUser,
-		AdminPassword:     fileConfig.AdminPassword,
+		SecretKey:         fileConfig.SecretKey,
 		SessionDuration:   time.Duration(fileConfig.SessionDurationMinute) * time.Minute,
 		CookieSecure:      fileConfig.CookieSecure,
-		IntegrationToken:  fileConfig.IntegrationToken,
 	}
 
 	app, err := httpapi.NewApp(config)

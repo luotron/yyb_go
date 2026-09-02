@@ -39,11 +39,9 @@ type Config struct {
 	KeepAliveAhead    time.Duration
 	PythonCommand     string
 	ScriptsServerURL  string
-	AdminUser         string
-	AdminPassword     string
+	SecretKey         string
 	SessionDuration   time.Duration
 	CookieSecure      bool
-	IntegrationToken  string
 }
 
 type App struct {
@@ -121,12 +119,12 @@ func NewApp(cfg Config) (*App, error) {
 	pool := protocol.NewPool(poolCfg, db)
 
 	scripts := scriptrunner.New(scriptrunner.Config{
-		ScriptsDir:       res.Scripts,
-		SdkDir:           res.ScriptSDK,
-		LogDir:           res.ScriptLogs,
-		PythonCommand:    cfg.PythonCommand,
-		ServerURL:        cfg.ScriptsServerURL,
-		IntegrationToken: cfg.IntegrationToken,
+		ScriptsDir:    res.Scripts,
+		SdkDir:        res.ScriptSDK,
+		LogDir:        res.ScriptLogs,
+		PythonCommand: cfg.PythonCommand,
+		ServerURL:     cfg.ScriptsServerURL,
+		SecretKey:     cfg.SecretKey,
 	})
 	scripts.Start()
 

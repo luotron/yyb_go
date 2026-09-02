@@ -16,7 +16,7 @@ import (
 )
 
 const sessionCookie = "yyb_session"
-const integrationTokenHeader = "X-Integration-Token"
+const secretKeyHeader = "X-Secret-Key"
 
 type loginAttempt struct {
 	Failures int
@@ -39,9 +39,9 @@ type authContextKey string
 
 const authUserKey authContextKey = "user"
 
-// authEnabled 账号密码都在 service.json 中配置时启用登录鉴权。
+// authEnabled service.json 配置了 secret_key 时启用访问控制。
 func (a *App) authEnabled() bool {
-	return a.cfg.AdminUser != "" && a.cfg.AdminPassword != ""
+	return a.cfg.SecretKey != ""
 }
 
 func (a *App) createSession(username string) string {
@@ -75,22 +75,24 @@ func (a *App) deleteSessionToken(token string) {
 	a.sessionMu.Unlock()
 }
 
-// requireBrowserSession 拦截未登录请求：API 路径返回 401 JSON，页面路径重定向到 /login。
+// requireBrowserSession 拦截未验证请求：会话 Cookie 或 X-Secret-Key 请求头任一有效即放行。
+// 未通过时：API 路径返回 401 JSON，页面路径重定向到 /login。
 func (a *App) requireBrowserSession() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if !a.authEnabled() {
 			c.Next()
 			return
 		}
-		if a.cfg.IntegrationToken != "" {
-			if token := strings.TrimSpace(c.GetHeader(integrationTokenHeader)); token != "" && token == a.cfg.IntegrationToken {
-				ctx := context.WithValue(c.Request.Context(), authUserKey,
-					&sessionUser{Username: "integration", DisplayName: "自动化调用", Role: "admin", Enabled: true})
-				c.Request = c.Request.WithContext(ctx)
-				c.Next()
-				return
-			}
+		// API 调用：请求头携带 secret key 即放行（脚本 SDK 自动附带）
+		if header := strings.TrimSpace(c.GetHeader(secretKeyHeader)); header != "" &&
+			subtle.ConstantTimeCompare([]byte(header), []byte(a.cfg.SecretKey)) == 1 {
+			ctx := context.WithValue(c.Request.Context(), authUserKey,
+				&sessionUser{Username: "secret-key", DisplayName: "API 调用", Role: "admin", Enabled: true})
+			c.Request = c.Request.WithContext(ctx)
+			c.Next()
+			return
 		}
+		// 网页：会话 Cookie 有效即放行
 		token, err := c.Cookie(sessionCookie)
 		if err == nil {
 			if user := a.userBySessionToken(token); user != nil {
@@ -141,9 +143,8 @@ func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-		Next     string `json:"next"`
+		SecretKey string `json:"secret_key"`
+		Next      string `json:"next"`
 	}
 	if err := decodeOptionalJSON(r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, "请求格式错误")
@@ -151,22 +152,21 @@ func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	key := clientIP(r)
 	if !a.allowLogin(key) {
-		writeError(w, http.StatusTooManyRequests, "登录失败次数过多，请 15 分钟后重试")
+		writeError(w, http.StatusTooManyRequests, "验证失败次数过多，请 15 分钟后重试")
 		return
 	}
-	username := strings.TrimSpace(body.Username)
-	passwordOK := subtle.ConstantTimeCompare([]byte(body.Password), []byte(a.cfg.AdminPassword)) == 1
-	if username != a.cfg.AdminUser || !passwordOK {
+	secretOK := subtle.ConstantTimeCompare([]byte(body.SecretKey), []byte(a.cfg.SecretKey)) == 1
+	if body.SecretKey == "" || !secretOK {
 		a.recordLoginFailure(key)
-		writeError(w, http.StatusUnauthorized, "用户名或密码错误")
+		writeError(w, http.StatusUnauthorized, "secret key 错误")
 		return
 	}
 	a.clearLoginFailures(key)
-	token := a.createSession(a.cfg.AdminUser)
+	token := a.createSession("admin")
 	setSessionCookie(w, token, a.cfg.CookieSecure, a.cfg.SessionDuration)
 	next := safeNext(body.Next)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"user": &sessionUser{Username: a.cfg.AdminUser, DisplayName: a.cfg.AdminUser, Role: "admin", Enabled: true},
+		"user": &sessionUser{Username: "admin", DisplayName: "管理员", Role: "admin", Enabled: true},
 		"next": next,
 	})
 }

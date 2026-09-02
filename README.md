@@ -109,23 +109,22 @@ resource/static/                静态资源
 | `tls_cert` / `tls_key` | PEM 证书与私钥路径；同时配置即启用 HTTPS/WSS。 |
 
 > 通过 nginx 终结 HTTPS/WSS + acme.sh 自动签发续期证书的完整部署方案见 `deploy/NGINX-ACME部署.md`。
-| `admin_user` / `admin_password` | 同时配置即启用管理员登录，首次启动时创建初始管理员。 |
-| `session_duration_minutes` | 登录会话有效期（分钟），默认 1440。 |
+| `secret_key` | 配置后启用访问验证：网页首次访问输入 secret key，API 用请求头 `X-Secret-Key`。 |
+| `session_duration_minutes` | 网页验证会话有效期（分钟），默认 1440。 |
 | `cookie_secure` | 会话 Cookie 是否加 Secure 标记（纯 HTTPS 部署可开 true）。 |
-| `integration_token` | 可选，自动化调用免登录令牌（请求头 `X-Integration-Token`）。 |
 
 旧 `aggregator`、`billing_config_file` 配置字段会作为未知字段拒绝加载，用于及时发现未迁移的旧配置。
 
-### 管理员登录
+### 访问验证（secret key）
 
-配置 `admin_user`/`admin_password` 后，除 `/login`、`/health`、`/ready`、`/docs/*`、`/static/*` 外所有页面与接口均需登录：
+配置 `secret_key` 后，除 `/login`、`/health`、`/ready`、`/docs/*`、`/static/*` 外所有页面与接口均需验证：
 
-- 未登录访问页面重定向到 `/login`，API 返回 401
-- 登录成功后发放 `yyb_session` Cookie（HttpOnly，默认 24 小时）
-- 自动化脚本通过 `integration_token`（请求头 `X-Integration-Token`）免登录调用；服务运行用户脚本时自动注入 `YYB_INTEGRATION_TOKEN`，SDK 自动携带
-- 左侧导航栏登录后出现「退出登录」入口
+- 网页首次访问重定向到 `/login`，输入 secret key 后发放 `yyb_session` Cookie（默认 24 小时），之后无需重复输入
+- API 调用在请求头携带 `X-Secret-Key: <secret_key>` 即放行
+- 服务运行用户脚本时自动注入 `YYB_SECRET_KEY`，SDK 自动携带该头，脚本无需处理
+- 左侧导航栏验证后出现「退出」入口
 
-密码直接配置在 `service.json`（明文），登录会话保存在服务内存中（重启后全部失效）；`integration_token` 免登录头不受重启影响。修改 `admin_user`/`admin_password` 后重启即生效。
+secret key 直接配置在 `service.json`（明文），修改后重启生效；验证会话保存在服务内存中，重启服务后需重新输入。
 
 ## 用户脚本
 

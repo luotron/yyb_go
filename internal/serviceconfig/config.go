@@ -24,11 +24,9 @@ type Config struct {
 	KeepAliveIntervalMinute int64  `json:"keepalive_interval_minutes"`
 	KeepAliveAheadMinute    int64  `json:"keepalive_ahead_minutes"`
 	PythonCommand           string `json:"python_command"`
-	AdminUser               string `json:"admin_user"`
-	AdminPassword           string `json:"admin_password"`
+	SecretKey               string `json:"secret_key"`
 	SessionDurationMinute   int64  `json:"session_duration_minutes"`
 	CookieSecure            bool   `json:"cookie_secure"`
-	IntegrationToken        string `json:"integration_token"`
 }
 
 func Load(filename string) (Config, error) {
@@ -68,6 +66,7 @@ func (c *Config) normalizeAndValidate() error {
 	c.DatabaseFilename = strings.TrimSpace(c.DatabaseFilename)
 	c.TCPProxy = strings.TrimSpace(c.TCPProxy)
 	c.PythonCommand = strings.TrimSpace(c.PythonCommand)
+	c.SecretKey = strings.TrimSpace(c.SecretKey)
 
 	if err := validateListenAddress(c.ListenAddress); err != nil {
 		return err
@@ -89,6 +88,12 @@ func (c *Config) normalizeAndValidate() error {
 	}
 	if c.PythonCommand == "" {
 		c.PythonCommand = "python"
+	}
+	if c.SessionDurationMinute < 0 {
+		return errors.New("session_duration_minutes 必须是非负整数")
+	}
+	if c.SessionDurationMinute == 0 {
+		c.SessionDurationMinute = 1440
 	}
 	return nil
 }

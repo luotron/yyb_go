@@ -55,6 +55,8 @@ class YYBClient:
         self.ref = ref
         self.timeout = timeout
         self.session = session or requests.Session()
+        # 服务端配置 secret_key 时，SDK 自动携带请求头免登录调用 API
+        self.secret_key = (os.getenv("YYB_SECRET_KEY") or "").strip()
 
     # ---------- 通用请求 ----------
 
@@ -67,8 +69,8 @@ class YYBClient:
     ) -> dict:
         url = self.base_url + path
         headers = {}
-        if self.integration_token:
-            headers["X-Integration-Token"] = self.integration_token
+        if self.secret_key:
+            headers["X-Secret-Key"] = self.secret_key
         try:
             resp = self.session.request(
                 method,

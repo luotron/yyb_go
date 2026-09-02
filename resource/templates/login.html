@@ -10,21 +10,20 @@
 <main class="auth-layout">
   <section class="auth-panel"><div class="auth-main">
     <div class="brand"><span class="brand-mark">Y</span><div><div class="brand-name">YYB Go</div><div class="brand-meta">本地账号与协议控制台</div></div></div>
-    <h1>登录控制台</h1>
-    <p class="lead">使用管理员账号继续。</p>
+    <h1>访问验证</h1>
+    <p class="lead">输入 service.json 中配置的 secret key 继续。</p>
     <form id="form">
-      <div class="field"><label for="username">用户名</label><input class="input" id="username" autocomplete="username" required autofocus></div>
-      <div class="field"><label for="password">密码</label><div class="password-wrap"><input class="input" id="password" type="password" autocomplete="current-password" required><button class="reveal" type="button" aria-label="显示密码" title="显示密码">&#128065;</button></div></div>
+      <div class="field"><label for="secretKey">Secret Key</label><div class="password-wrap"><input class="input" id="secretKey" type="password" autocomplete="current-password" required autofocus><button class="reveal" type="button" aria-label="显示" title="显示">&#128065;</button></div></div>
       <div class="form-error" id="error" role="alert"></div>
-      <button class="btn primary" id="submit" type="submit">登录</button>
+      <button class="btn primary" id="submit" type="submit">验证</button>
     </form>
   </div></section>
   <section class="auth-context"><div class="context-inner"><div class="context-kicker">Self-hosted operations</div><h2>账号、协议和脚本都在一个受控入口中。</h2><p>登录后可管理微信账号、调用小程序协议与运行定时脚本。</p></div></section>
 </main>
 <script>
 const $=id=>document.getElementById(id);
-document.querySelector('.reveal').onclick=e=>{const p=$('password'),show=p.type==='password';p.type=show?'text':'password';e.currentTarget.setAttribute('aria-label',show?'隐藏密码':'显示密码')};
-$('form').onsubmit=async e=>{e.preventDefault();$('error').textContent='';$('submit').disabled=true;try{const params=new URLSearchParams(location.search),response=await fetch('/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:$('username').value,password:$('password').value,next:params.get('next')||'/'})}),json=await response.json();if(!response.ok||json.code!==0)throw new Error(json.msg||'登录失败');location.href=json.data.next||'/'}catch(error){$('error').textContent=error.message;$('submit').disabled=false}};
+document.querySelector('.reveal').onclick=e=>{const p=$('secretKey'),show=p.type==='password';p.type=show?'text':'password';e.currentTarget.setAttribute('aria-label',show?'隐藏':'显示')};
+$('form').onsubmit=async e=>{e.preventDefault();$('error').textContent='';$('submit').disabled=true;try{const params=new URLSearchParams(location.search),response=await fetch('/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({secret_key:$('secretKey').value,next:params.get('next')||'/'})}),json=await response.json();if(!response.ok||json.code!==0)throw new Error(json.msg||'验证失败');location.href=json.data.next||'/'}catch(error){$('error').textContent=error.message;$('submit').disabled=false}};
 </script>
 </body>
 </html>
