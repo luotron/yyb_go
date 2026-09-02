@@ -161,12 +161,18 @@ func (r *Runner) Python() string {
 	if r.pythonResolved != "" {
 		return r.pythonResolved
 	}
-	cmd := r.cfg.PythonCommand
-	if cmd == "" {
-		cmd = "python"
-	}
-	if path, err := exec.LookPath(cmd); err == nil {
-		r.pythonResolved = path
+	candidates := []string{r.cfg.PythonCommand, "python", "python3"}
+	seen := map[string]bool{}
+	for _, cmd := range candidates {
+		cmd = strings.TrimSpace(cmd)
+		if cmd == "" || seen[cmd] {
+			continue
+		}
+		seen[cmd] = true
+		if path, err := exec.LookPath(cmd); err == nil {
+			r.pythonResolved = path
+			break
+		}
 	}
 	return r.pythonResolved
 }
@@ -314,7 +320,7 @@ func (r *Runner) Run(name string) error {
 	}
 	python := r.Python()
 	if python == "" {
-		return fmt.Errorf("找不到 Python（%s），请安装并确保在 PATH 中", defaultString(r.cfg.PythonCommand, "python"))
+		return fmt.Errorf("找不到 Python（已尝试 %s / python / python3），请安装并确保在 PATH 中", defaultString(r.cfg.PythonCommand, "python_command 配置"))
 	}
 	r.mu.Lock()
 	if state, ok := r.runs[name]; ok && !state.finished {

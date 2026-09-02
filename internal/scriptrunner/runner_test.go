@@ -124,8 +124,9 @@ func TestRunAndLogs(t *testing.T) {
 
 func TestRunMissingPython(t *testing.T) {
 	runner := newTestRunner(t)
-	runner.cfg.PythonCommand = "definitely-not-a-real-python-binary"
+	t.Setenv("PATH", t.TempDir()) // 清空 PATH，让 python/python3 回退链全部失败
 	runner.pythonResolved = ""
+	runner.cfg.PythonCommand = "definitely-not-a-real-python-binary"
 	writeScript(t, runner, "x.py", "print('x')")
 	err := runner.Run("x.py")
 	if err == nil || !strings.Contains(err.Error(), "找不到 Python") {
