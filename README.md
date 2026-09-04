@@ -150,7 +150,7 @@ $env:CGO_ENABLED="0"; $env:GOOS="linux"; $env:GOARCH="amd64"
 go build -trimpath -ldflags="-s -w" -o bin\yyb-go-local-linux-amd64 ./cmd/yyb-go
 ```
 
-SQLite 驱动为纯 Go 实现（`modernc.org/sqlite`），因此可用 `CGO_ENABLED=0` 做静态编译与交叉编译。运行可执行文件时工作目录需为项目根目录（读取 `config/service.json` 与 `resource/`）。
+SQLite 驱动为纯 Go 实现（`modernc.org/sqlite`），因此可用 `CGO_ENABLED=0` 做静态编译与交叉编译。可执行文件不依赖工作目录：启动时从「当前工作目录 → 程序所在目录」向上逐级查找 `config/service.json`，配置中 `data_root`/`asset_root` 的相对路径以配置所在项目根目录为基准解析，双击 `bin/yyb-go.exe` 也可正常启动。
 
 ## Docker
 

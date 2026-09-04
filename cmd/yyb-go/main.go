@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -17,6 +18,41 @@ import (
 )
 
 const serviceConfigFilename = "config/service.json"
+
+// locateServiceConfig 定位 config/service.json 并返回其绝对路径。
+// 依次从当前工作目录、可执行文件所在目录向上逐级查找，
+// 保证无论从项目根目录、bin 目录还是双击 exe 启动都能找到配置。
+func locateServiceConfig() (string, error) {
+	var starts []string
+	if cwd, err := os.Getwd(); err == nil {
+		starts = append(starts, cwd)
+	}
+	if exe, err := os.Executable(); err == nil {
+		starts = append(starts, filepath.Dir(exe))
+	}
+	seen := map[string]bool{}
+	for _, start := range starts {
+		dir, err := filepath.Abs(start)
+		if err != nil {
+			continue
+		}
+		for {
+			if seen[dir] {
+				break
+			}
+			seen[dir] = true
+			if info, err := os.Stat(filepath.Join(dir, serviceConfigFilename)); err == nil && !info.IsDir() {
+				return filepath.Join(dir, serviceConfigFilename), nil
+			}
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				break
+			}
+			dir = parent
+		}
+	}
+	return "", fmt.Errorf("未找到 %s：请确认配置随程序放在同一目录树中", serviceConfigFilename)
+}
 
 // listenBaseURL 将监听地址转换为脚本环境变量 YYB_SERVER 可用的本机地址。
 func listenBaseURL(addr string) string {
@@ -38,9 +74,22 @@ func main() {
 }
 
 func run() error {
-	fileConfig, err := serviceconfig.Load(serviceConfigFilename)
+	configPath, err := locateServiceConfig()
 	if err != nil {
 		return err
+	}
+	fileConfig, err := serviceconfig.Load(configPath)
+	if err != nil {
+		return err
+	}
+	// 配置里的 data_root / asset_root 若为相对路径，以配置所在项目根目录为基准解析，
+	// 与启动时的工作目录无关。
+	projectRoot := filepath.Dir(filepath.Dir(configPath))
+	if !filepath.IsAbs(fileConfig.DataRoot) {
+		fileConfig.DataRoot = filepath.Join(projectRoot, fileConfig.DataRoot)
+	}
+	if !filepath.IsAbs(fileConfig.AssetRoot) {
+		fileConfig.AssetRoot = filepath.Join(projectRoot, fileConfig.AssetRoot)
 	}
 
 	config := httpapi.Config{
