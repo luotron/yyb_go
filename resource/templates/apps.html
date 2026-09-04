@@ -266,6 +266,19 @@
 
     .scripts-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
     .scripts-title { margin: 0; font-size: 15px; font-weight: 720; }
+    .scripts-args { display: grid; gap: 5px; flex: 1 1 320px; min-width: 260px; }
+    .scripts-args label { color: var(--muted); font-size: 12px; }
+    .scripts-args-input {
+      width: 100%;
+      min-height: 34px;
+      padding: 7px 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--bg);
+      color: var(--ink);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12.5px;
+    }
 
     .scripts-grid {
       display: grid;
@@ -354,6 +367,11 @@
         <div>
           <h2 class="scripts-title">用户脚本</h2>
           <p class="page-lead" id="scriptsMeta">加载中…</p>
+        </div>
+        <div class="scripts-args">
+          <label for="scriptArgsInput">运行参数（随脚本的命令行传入）</label>
+          <input class="scripts-args-input" id="scriptArgsInput" type="text" spellcheck="false" autocomplete="off"
+                 placeholder='例如 --json {"amount":"100.00","orderNo":"xxx"}'>
         </div>
         <div class="inline-actions">
           <input type="file" id="scriptFileInput" accept=".py" class="hidden">
@@ -489,6 +507,6 @@
   <script src="/static/js/nav.js"></script>
   <script src="/static/js/api-catalog.js"></script>
   <script src="/static/js/apps.js"></script>
-  <script src="/static/js/scripts.js?v=2"></script>
+  <script src="/static/js/scripts.js?v=3"></script>
 </body>
 </html>

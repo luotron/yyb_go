@@ -5,3 +5,5 @@
 /resource/scripts/*.py
 /resource/scripts/logs/
 /resource/scripts/schedules.json
+/resource/scripts/__pycache__/
+/resource/scripts/sdk/__pycache__/

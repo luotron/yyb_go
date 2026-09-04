@@ -252,7 +252,7 @@ func newOpenAPISpec() map[string]any {
 					[]string{"scripts"},
 					"立即运行脚本",
 					[]map[string]any{pathStringParam("name", "脚本文件名，如 demo.py。")},
-					nil,
+					jsonRequestBody(refSchema("ScriptRunRequest")),
 					defaulted(map[string]any{
 						"200": jsonResponse("脚本状态。", refSchema("ScriptInfo")),
 					}),
@@ -454,6 +454,9 @@ func newOpenAPISpec() map[string]any {
 				}),
 				"ScriptScheduleRequest": objectSchema([]string{"cron"}, map[string]any{
 					"cron": map[string]any{"type": "string", "example": "32 16 * * *", "description": "5 段 cron：分 时 日 月 周。"},
+				}),
+				"ScriptRunRequest": objectSchema(nil, map[string]any{
+					"args": map[string]any{"type": "string", "description": "传给脚本的命令行参数（shell 风格，支持引号与转义），同时注入环境变量 YYB_SCRIPT_ARGS。"},
 				}),
 				"ScriptLogsResponse": objectSchema([]string{"name", "content", "running"}, map[string]any{
 					"name":        map[string]any{"type": "string"},

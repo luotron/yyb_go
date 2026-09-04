@@ -22,6 +22,32 @@
       " " + pad(date.getHours()) + ":" + pad(date.getMinutes());
   }
 
+  function argsKey(name) {
+    return "yyb.scriptArgs." + name;
+  }
+
+  function loadArgs(name) {
+    const input = $("scriptArgsInput");
+    if (!input) return "";
+    try {
+      return localStorage.getItem(argsKey(name)) || "";
+    } catch {
+      return input.value || "";
+    }
+  }
+
+  function saveArgs(name, value) {
+    try {
+      if (value) {
+        localStorage.setItem(argsKey(name), value);
+      } else {
+        localStorage.removeItem(argsKey(name));
+      }
+    } catch {
+      /* 隐私模式等场景忽略 */
+    }
+  }
+
   async function api(method, path, body) {
     const options = { method };
     if (body !== undefined) {
@@ -118,10 +144,14 @@
   async function actScript(action, name) {
     try {
       switch (action) {
-        case "run":
-          await api("POST", "/scripts/" + encodeURIComponent(name) + "/run");
+        case "run": {
+          const args = ($("scriptArgsInput").value || "").trim();
+          await api("POST", "/scripts/" + encodeURIComponent(name) + "/run",
+            args ? { args: args } : {});
+          saveArgs(name, args);
           selectScript(name);
           break;
+        }
         case "stop":
           await api("POST", "/scripts/" + encodeURIComponent(name) + "/stop");
           break;
@@ -155,6 +185,7 @@
   function selectScript(name) {
     state.selected = name;
     state.follow = true;
+    $("scriptArgsInput").value = loadArgs(name);
     $("logFollowBtn").classList.add("active");
     $("logTitle").textContent = name;
     $("logMeta").textContent = "";

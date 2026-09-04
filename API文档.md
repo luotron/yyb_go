@@ -301,6 +301,7 @@ sign       = HMAC-SHA256(key=signKey, message=raw).hex
 - `YYB_SERVER` / `YYB_BASE_URL`：本地服务地址（`listen_address` 映射到 127.0.0.1）
 - `PYTHONPATH`：`asset_root/scripts/sdk`（内含 `yyb_sdk.py`，脚本内 `import yyb_sdk` 即可使用）
 - `YYB_SCRIPT_NAME`、`YYB_SCRIPTS_DIR`：脚本名与脚本目录
+- `YYB_SCRIPT_ARGS`：运行参数原文（`POST /scripts/{name}/run` 的 `args` 字段，仅在非空时注入）
 - `PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`、`PYTHONUNBUFFERED=1`：输出按 UTF-8 编码且无缓冲，保证日志实时推送（脚本内无需手动 flush）
 
 Python 解释器由 `python_command` 配置（默认 `python`），需自行安装并确保在 PATH 中。
@@ -332,7 +333,14 @@ multipart 上传，字段 `file`，仅接受合法 `*.py` 文件名（≤1 MiB�
 
 ### 8.4 运行与停止
 
-- `POST /scripts/{name}/run`：立即运行；已在运行返回 `409`。
+- `POST /scripts/{name}/run`：立即运行；已在运行返回 `409`。请求体可选：
+
+```json
+{"args": "--json '{\"amount\":\"100.00\"}' --flag value"}
+```
+
+`args` 按 shell 风格切分（支持单双引号、反斜杠转义）后作为命令行参数传给脚本（即 `sys.argv[1:]`），同时以环境变量 `YYB_SCRIPT_ARGS` 注入。网页「用户脚本」面板顶部提供「运行参数」输入框，运行前填好即随请求提交，并按脚本名记忆上次参数。
+
 - `POST /scripts/{name}/stop`：终止运行。
 
 ### 8.5 日志

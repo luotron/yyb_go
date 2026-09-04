@@ -85,7 +85,14 @@ func (a *App) handleScriptUpload(c *gin.Context) {
 }
 
 func (a *App) handleScriptRun(c *gin.Context) {
-	if err := a.scripts.Run(c.Param("name")); err != nil {
+	var body struct {
+		Args string `json:"args"`
+	}
+	if err := decodeOptionalJSON(c.Request, &body); err != nil {
+		writeError(c.Writer, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+	if err := a.scripts.RunArgs(c.Param("name"), scriptrunner.SplitArgs(body.Args)); err != nil {
 		writeError(c.Writer, http.StatusConflict, err.Error())
 		return
 	}

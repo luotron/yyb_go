@@ -311,6 +311,10 @@ func (r *Runner) Status(name string) (Script, bool) {
 }
 
 func (r *Runner) Run(name string) error {
+	return r.RunArgs(name, nil)
+}
+
+func (r *Runner) RunArgs(name string, args []string) error {
 	if !ValidName(name) {
 		return fmt.Errorf("脚本名不合法: %s", name)
 	}
@@ -349,9 +353,9 @@ func (r *Runner) Run(name string) error {
 	}
 	writer := &broadcastWriter{file: logFile, stream: state.stream}
 
-	command := exec.CommandContext(ctx, python, name)
+	command := exec.CommandContext(ctx, python, append([]string{name}, args...)...)
 	command.Dir = r.cfg.ScriptsDir
-	command.Env = r.scriptEnv(name)
+	command.Env = r.scriptEnv(name, args)
 	command.Stdout = writer
 	command.Stderr = writer
 
@@ -498,12 +502,15 @@ func (r *Runner) Subscribe(name string) (current []byte, logs <-chan []byte, don
 	return []byte(content), sub, doneCh, cancelFn, nil
 }
 
-func (r *Runner) scriptEnv(name string) []string {
+func (r *Runner) scriptEnv(name string, args []string) []string {
 	env := os.Environ()
 	if r.cfg.ServerURL != "" {
 		env = append(env, "YYB_SERVER="+r.cfg.ServerURL, "YYB_BASE_URL="+r.cfg.ServerURL)
 	}
 	env = append(env, "YYB_SCRIPT_NAME="+name, "YYB_SCRIPTS_DIR="+r.cfg.ScriptsDir)
+	if len(args) > 0 {
+		env = append(env, "YYB_SCRIPT_ARGS="+strings.Join(args, " "))
+	}
 	env = append(env, "PYTHONUTF8=1", "PYTHONIOENCODING=utf-8", "PYTHONUNBUFFERED=1")
 	if r.cfg.SecretKey != "" {
 		env = append(env, "YYB_SECRET_KEY="+r.cfg.SecretKey)
@@ -602,4 +609,47 @@ func defaultString(value, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+// SplitArgs 按 shell 风格把参数字符串切分为命令行参数：
+// 支持单双引号、反斜杠转义与引号内嵌引号，例如：
+//
+//	--json '{"amount":"100.00","orderNo":"x"}' --flag "a b"
+func SplitArgs(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	var args []string
+	var current strings.Builder
+	inSingle, inDouble := false, false
+	escaped := false
+	flush := func() {
+		if current.Len() > 0 {
+			args = append(args, current.String())
+			current.Reset()
+		}
+	}
+	for _, ch := range raw {
+		switch {
+		case escaped:
+			current.WriteRune(ch)
+			escaped = false
+		case ch == '\\' && !inSingle:
+			escaped = true
+		case ch == '\'' && !inDouble:
+			inSingle = !inSingle
+		case ch == '"' && !inSingle:
+			inDouble = !inDouble
+		case (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r') && !inSingle && !inDouble:
+			flush()
+		default:
+			current.WriteRune(ch)
+		}
+	}
+	if escaped {
+		current.WriteRune('\\')
+	}
+	flush()
+	return args
 }
